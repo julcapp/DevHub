@@ -1,0 +1,20 @@
+{
+  "workspace_paths": [
+    "C:\\Users\\iav\\Documents\\GitHub"
+  ],
+  "default_branch": "main",
+  "allowed_branches": [
+    "main",
+    "master"
+  ],
+  "exclude_folders": [
+    "DevHub_backup",
+    "roylty_v0_1_BACKUP"
+  ],
+  "skip_non_default_branch": true,
+  "auto_fetch": true,
+  "auto_pull": true,
+  "auto_push": true,
+  "create_log": true,
+  "theme": "dark"
+}
