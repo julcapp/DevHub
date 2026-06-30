@@ -27,7 +27,8 @@ def run_git(repo_path: Path, args: list[str]) -> tuple[str, str, int]:
         ["git"] + args,
         cwd=repo_path,
         text=True,
-        capture_output=True
+        capture_output=True,
+        shell=False
     )
     return result.stdout.strip(), result.stderr.strip(), result.returncode
 
@@ -57,7 +58,7 @@ def find_repositories(
 
 def get_branch(repo_path: Path) -> str:
     stdout, stderr, code = run_git(repo_path, ["branch", "--show-current"])
-    return stdout
+    return stdout or "unknown"
 
 
 def has_local_changes(repo_path: Path) -> bool:
@@ -65,14 +66,134 @@ def has_local_changes(repo_path: Path) -> bool:
     return bool(stdout)
 
 
-def sync_repository(
-    repo_path: Path,
-    allowed_branches: list[str]
-) -> RepositoryResult:
-    result = RepositoryResult(
-        name=repo_path.name,
-        path=str(repo_path)
+def get_remote_url(repo_path: Path) -> str:
+    stdout, stderr, code = run_git(repo_path, ["remote", "get-url", "origin"])
+    return stdout if code == 0 else ""
+
+
+def get_local_last_commit_date(repo_path: Path) -> str:
+    stdout, stderr, code = run_git(repo_path, ["log", "-1", "--format=%ci"])
+    return stdout if code == 0 else ""
+
+
+def get_remote_last_commit_date(repo_path: Path, branch: str) -> str:
+    # fetch is intentionally separated from this function; call fetch before comparing.
+    remote_ref = f"origin/{branch}"
+    stdout, stderr, code = run_git(repo_path, ["log", remote_ref, "-1", "--format=%ci"])
+    return stdout if code == 0 else ""
+
+
+def get_ahead_behind(repo_path: Path, branch: str) -> tuple[int, int]:
+    remote_ref = f"origin/{branch}"
+    stdout, stderr, code = run_git(
+        repo_path,
+        ["rev-list", "--left-right", "--count", f"HEAD...{remote_ref}"]
     )
+
+    if code != 0 or not stdout:
+        return 0, 0
+
+    parts = stdout.split()
+    if len(parts) != 2:
+        return 0, 0
+
+    try:
+        ahead = int(parts[0])
+        behind = int(parts[1])
+        return ahead, behind
+    except ValueError:
+        return 0, 0
+
+
+def detect_sync_state(repo_path: Path, branch: str) -> str:
+    if has_local_changes(repo_path):
+        return "COMMIT_REQUIRED"
+
+    # Refresh remote refs for more accurate status.
+    run_git(repo_path, ["fetch", "--prune"])
+
+    ahead, behind = get_ahead_behind(repo_path, branch)
+
+    if ahead > 0 and behind > 0:
+        return "DIVERGED"
+    if ahead > 0:
+        return "PUSH_REQUIRED"
+    if behind > 0:
+        return "PULL_REQUIRED"
+    return "SYNCED"
+
+
+def read_readme_summary(repo_path: Path, max_chars: int = 180) -> str:
+    readme_files = [
+        repo_path / "README.md",
+        repo_path / "readme.md",
+        repo_path / "README.MD"
+    ]
+
+    for readme_file in readme_files:
+        if readme_file.exists():
+            try:
+                content = readme_file.read_text(encoding="utf-8", errors="ignore")
+                lines = []
+
+                for line in content.splitlines():
+                    cleaned = line.strip()
+
+                    if not cleaned:
+                        continue
+                    if cleaned.startswith("#"):
+                        continue
+                    if cleaned.startswith("!"):
+                        continue
+                    if cleaned.startswith("["):
+                        continue
+                    if cleaned.startswith("---"):
+                        continue
+
+                    lines.append(cleaned)
+
+                if not lines:
+                    return "README найден, но описание не заполнено"
+
+                summary = " ".join(lines)
+                if len(summary) > max_chars:
+                    summary = summary[:max_chars].rstrip() + "..."
+
+                return summary
+
+            except Exception as error:
+                return f"Ошибка чтения README: {error}"
+
+    return "README.md не найден"
+
+
+def run_repository_command(repo_path: Path, command: list[str]) -> RepositoryResult:
+    result = RepositoryResult(name=repo_path.name, path=str(repo_path))
+    result.branch = get_branch(repo_path)
+    result.messages.append(f"Repository: {repo_path.name}")
+    result.messages.append(f"Path: {repo_path}")
+    result.messages.append(f"Branch: {result.branch}")
+    result.messages.append(f"> git {' '.join(command)}")
+
+    stdout, stderr, code = run_git(repo_path, command)
+
+    if stdout:
+        result.messages.append(stdout)
+    if stderr:
+        result.messages.append(stderr)
+
+    if code == 0:
+        result.status = "SUCCESS"
+        result.messages.append("STATUS: SUCCESS")
+    else:
+        result.status = "ERROR"
+        result.messages.append(f"ERROR: command failed with code {code}")
+
+    return result
+
+
+def sync_repository(repo_path: Path, allowed_branches: list[str]) -> RepositoryResult:
+    result = RepositoryResult(name=repo_path.name, path=str(repo_path))
 
     result.messages.append(f"Repository: {repo_path.name}")
     result.messages.append(f"Path: {repo_path}")
@@ -83,9 +204,7 @@ def sync_repository(
 
     if branch not in allowed_branches:
         result.status = "SKIPPED"
-        result.messages.append(
-            f"WARNING: skipped, branch '{branch}' is not allowed"
-        )
+        result.messages.append(f"WARNING: skipped, branch '{branch}' is not allowed")
         return result
 
     if has_local_changes(repo_path):
@@ -93,11 +212,7 @@ def sync_repository(
         result.messages.append("WARNING: skipped, local changes found")
         return result
 
-    commands = [
-        ["fetch", "--prune"],
-        ["pull"],
-        ["push"]
-    ]
+    commands = [["fetch", "--prune"], ["pull"], ["push"]]
 
     for command in commands:
         command_text = "git " + " ".join(command)
@@ -107,20 +222,16 @@ def sync_repository(
 
         if stdout:
             result.messages.append(stdout)
-
         if stderr:
             result.messages.append(stderr)
 
         if code != 0:
             result.status = "ERROR"
-            result.messages.append(
-                f"ERROR: command failed with code {code}"
-            )
+            result.messages.append(f"ERROR: command failed with code {code}")
             return result
 
     result.status = "SUCCESS"
     result.messages.append("STATUS: SUCCESS")
-
     return result
 
 
@@ -140,11 +251,7 @@ def sync_all_repositories(
     summary = SyncSummary(total=len(repositories))
 
     for repo in repositories:
-        repo_result = sync_repository(
-            repo_path=repo,
-            allowed_branches=allowed_branches
-        )
-
+        repo_result = sync_repository(repo_path=repo, allowed_branches=allowed_branches)
         results.append(repo_result)
 
         if repo_result.status == "SUCCESS":
@@ -155,20 +262,12 @@ def sync_all_repositories(
             summary.errors += 1
 
     summary.duration_seconds = round(perf_counter() - start, 2)
-
     return results, summary
 
 
 def format_result(result: RepositoryResult) -> list[str]:
-    lines = []
-    lines.append("")
-    lines.append("=" * 70)
-    lines.append(f"{result.name} [{result.status}]")
-    lines.append("=" * 70)
-
-    for message in result.messages:
-        lines.append(message)
-
+    lines = ["", "=" * 70, f"{result.name} [{result.status}]", "=" * 70]
+    lines.extend(result.messages)
     return lines
 
 

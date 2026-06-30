@@ -1,0 +1,74 @@
+{
+  "dhms_version": "1.0",
+
+  "project": {
+    "name": "DevHub",
+    "code": "devhub",
+    "description": "Единый центр управления проектами, Git, GitHub, документацией и AI.",
+    "type": "desktop",
+    "status": "development",
+    "priority": "critical",
+    "version": "0.3.0-alpha"
+  },
+
+  "repository": {
+    "provider": "GitHub",
+    "owner": "julcapp",
+    "name": "DevHub",
+    "default_branch": "main",
+    "visibility": "private"
+  },
+
+  "technology": {
+    "language": "Python",
+    "framework": "PySide6",
+    "python_version": "3.14",
+    "build_system": "PyInstaller"
+  },
+
+  "author": {
+    "name": "Александр Викторович",
+    "organization": "DevHub Project"
+  },
+
+  "documentation": {
+    "readme": "README.md",
+    "requirements": "docs/01_Requirements",
+    "architecture": "docs/02_Architecture",
+    "roadmap": "docs/03_RoadMap"
+  },
+
+  "directories": {
+    "source": "app",
+    "tests": "tests",
+    "plugins": "plugins",
+    "logs": "logs",
+    "config": "config"
+  },
+
+  "features": [
+    "Git synchronization",
+    "GitHub integration",
+    "Project metadata",
+    "Developer dashboard",
+    "AI Assistant"
+  ],
+
+  "planned_modules": [
+    "Docker",
+    "GitHub API",
+    "AI",
+    "Release Manager",
+    "Documentation Manager",
+    "Plugin System"
+  ],
+
+  "tags": [
+    "git",
+    "github",
+    "desktop",
+    "python",
+    "devhub",
+    "ai"
+  ]
+}
