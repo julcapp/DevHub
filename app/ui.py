@@ -30,6 +30,7 @@ from app.git_manager import (
     sync_all_repositories
 )
 from app.project_metadata import load_project_metadata
+from app.workers.git_task import GitTask
 
 
 SYNC_STATE_RU = {
@@ -58,6 +59,7 @@ class MainWindow(QMainWindow):
         self.repositories: list[Path] = []
         self.selected_repo: Path | None = None
         self.devadvisor_window: DevAdvisorWindow | None = None
+        self.current_git_task = None
 
         self.init_ui()
 
@@ -341,18 +343,60 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "DevHub", "Сначала выберите проект.")
             return
 
+        if self.current_git_task and self.current_git_task.isRunning():
+            QMessageBox.information(
+                self,
+                "DevHub",
+                "Другая Git-операция уже выполняется. Дождитесь завершения."
+            )
+            return
+
         command_name = "git " + " ".join(command)
+
         self.write_log("")
         self.write_log("=" * 70)
         self.write_log(f"Команда для выбранного проекта: {command_name}")
         self.write_log("=" * 70)
 
-        result = run_repository_command(self.selected_repo, command)
+        self.statusBar().showMessage(f"Выполняется: {command_name}...")
+
+        self.fetch_button.setEnabled(False)
+        self.pull_button.setEnabled(False)
+        self.push_button.setEnabled(False)
+        self.sync_button.setEnabled(False)
+        self.scan_button.setEnabled(False)
+
+        self.current_git_task = GitTask(self.selected_repo, command, self)
+        self.current_git_task.progress.connect(self.write_log)
+        self.current_git_task.finished_success.connect(self.on_git_task_finished)
+        self.current_git_task.finished_error.connect(self.on_git_task_error)
+        self.current_git_task.finished.connect(self.on_git_task_cleanup)
+        self.current_git_task.start()
+
+    def on_git_task_finished(self, result):
         for line in format_result(result):
             self.write_log(line)
 
-        self.statusBar().showMessage(f"Команда выполнена: {command_name} [{result.status}]")
+        self.statusBar().showMessage(f"Команда выполнена: {result.status}")
+
+        # Важно: scan_repositories пока остается синхронным.
+        # Его вынесем в фон в следующем пакете стабилизации.
         self.scan_repositories()
+
+    def on_git_task_error(self, error_text: str):
+        self.write_log("")
+        self.write_log("ERROR")
+        self.write_log(error_text)
+        self.statusBar().showMessage("Ошибка выполнения Git-команды")
+        QMessageBox.critical(self, "Ошибка Git", error_text)
+
+    def on_git_task_cleanup(self):
+        self.fetch_button.setEnabled(True)
+        self.pull_button.setEnabled(True)
+        self.push_button.setEnabled(True)
+        self.sync_button.setEnabled(True)
+        self.scan_button.setEnabled(True)
+        self.current_git_task = None
 
     def sync_all(self):
         self.log_output.clear()
