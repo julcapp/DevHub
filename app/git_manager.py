@@ -109,9 +109,6 @@ def detect_sync_state(repo_path: Path, branch: str) -> str:
     if has_local_changes(repo_path):
         return "COMMIT_REQUIRED"
 
-    # Refresh remote refs for more accurate status.
-    run_git(repo_path, ["fetch", "--prune"])
-
     ahead, behind = get_ahead_behind(repo_path, branch)
 
     if ahead > 0 and behind > 0:

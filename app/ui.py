@@ -1,6 +1,8 @@
 from pathlib import Path
+from datetime import datetime
+from time import perf_counter
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -60,6 +62,7 @@ class MainWindow(QMainWindow):
         self.selected_repo: Path | None = None
         self.devadvisor_window: DevAdvisorWindow | None = None
         self.current_git_task = None
+        self.started_at = datetime.now()
 
         self.init_ui()
 
@@ -69,6 +72,22 @@ class MainWindow(QMainWindow):
 
         header = QLabel("DevHub v0.5 Alpha — Ваш центр управления инженерными проектами")
         header.setObjectName("HeaderLabel")
+
+        self.runtime_label = QLabel()
+        self.runtime_label.setObjectName("RuntimeLabel")
+        self.runtime_label.setToolTip(
+            "Время запуска текущей сессии DevHub и продолжительность работы приложения."
+        )
+
+        self.runtime_timer = QTimer(self)
+        self.runtime_timer.timeout.connect(self.update_runtime_label)
+        self.runtime_timer.start(1000)
+        self.update_runtime_label()
+
+        header_layout = QHBoxLayout()
+        header_layout.addWidget(header)
+        header_layout.addStretch()
+        header_layout.addWidget(self.runtime_label)
 
         toolbar_layout = QHBoxLayout()
 
@@ -188,7 +207,7 @@ class MainWindow(QMainWindow):
         vertical_splitter.addWidget(log_panel)
         vertical_splitter.setSizes([590, 260])
 
-        root_layout.addWidget(header)
+        root_layout.addLayout(header_layout)
         root_layout.addLayout(toolbar_layout)
         root_layout.addWidget(vertical_splitter)
 
@@ -210,6 +229,13 @@ class MainWindow(QMainWindow):
                 font-size: 18px;
                 font-weight: bold;
                 padding: 8px;
+            }
+
+            QLabel#RuntimeLabel {
+                font-size: 12px;
+                font-weight: normal;
+                padding: 8px;
+                color: #404040;
             }
 
             QLabel {
@@ -244,6 +270,19 @@ class MainWindow(QMainWindow):
             }
         """)
 
+    def update_runtime_label(self):
+        elapsed = datetime.now() - self.started_at
+        total_seconds = int(elapsed.total_seconds())
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+
+        started_text = self.started_at.strftime("%d.%m.%Y %H:%M:%S")
+        uptime_text = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        self.runtime_label.setText(
+            f"Запуск: {started_text} | Время работы: {uptime_text}"
+        )
+
     def write_log(self, text: str):
         self.log_output.append(text)
 
@@ -252,24 +291,58 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Журнал очищен")
 
     def scan_repositories(self):
+        total_start = perf_counter()
+
         self.repo_table.setRowCount(0)
-        self.log_output.clear()
         self.selected_repo = None
 
+        self.write_log("")
+        self.write_log("=" * 70)
+        self.write_log("EDP-0005.1 | Repository Scan Diagnostics")
+        self.write_log("=" * 70)
+
+        workspace_start = perf_counter()
         self.repositories = find_repositories(
             workspace_paths=self.settings["workspace_paths"],
             exclude_folders=self.settings.get("exclude_folders", [])
         )
+        workspace_duration = perf_counter() - workspace_start
 
+        self.write_log(f"Workspace scan: {workspace_duration:.3f} sec")
+        self.write_log(f"Repositories found: {len(self.repositories)}")
+
+        ui_start = perf_counter()
         self.repo_table.setRowCount(len(self.repositories))
+        ui_prepare_duration = perf_counter() - ui_start
+        self.write_log(f"UI table prepare: {ui_prepare_duration:.3f} sec")
+
+        slowest_repo_name = ""
+        slowest_repo_duration = 0.0
 
         for row, repo in enumerate(self.repositories):
-            branch = get_branch(repo)
-            metadata = load_project_metadata(repo)
-            sync_state = detect_sync_state(repo, branch)
-            local_date = get_local_last_commit_date(repo)
-            remote_date = get_remote_last_commit_date(repo, branch)
+            repo_start = perf_counter()
 
+            metadata_start = perf_counter()
+            metadata = load_project_metadata(repo)
+            metadata_duration = perf_counter() - metadata_start
+
+            branch_start = perf_counter()
+            branch = get_branch(repo)
+            branch_duration = perf_counter() - branch_start
+
+            state_start = perf_counter()
+            sync_state = detect_sync_state(repo, branch)
+            state_duration = perf_counter() - state_start
+
+            local_start = perf_counter()
+            local_date = get_local_last_commit_date(repo)
+            local_duration = perf_counter() - local_start
+
+            remote_start = perf_counter()
+            remote_date = get_remote_last_commit_date(repo, branch)
+            remote_duration = perf_counter() - remote_start
+
+            row_ui_start = perf_counter()
             self.repo_table.setItem(row, 0, QTableWidgetItem(metadata.name))
             self.repo_table.setItem(row, 1, QTableWidgetItem(branch))
             self.repo_table.setItem(row, 2, QTableWidgetItem(translate_sync_state(sync_state)))
@@ -279,9 +352,34 @@ class MainWindow(QMainWindow):
             self.repo_table.setItem(row, 6, QTableWidgetItem(metadata.status))
             self.repo_table.setItem(row, 7, QTableWidgetItem(metadata.description))
             self.repo_table.setItem(row, 8, QTableWidgetItem(str(repo)))
+            row_ui_duration = perf_counter() - row_ui_start
 
-        self.write_log(f"Найдено репозиториев: {len(self.repositories)}")
-        self.statusBar().showMessage(f"Найдено репозиториев: {len(self.repositories)}")
+            repo_duration = perf_counter() - repo_start
+
+            if repo_duration > slowest_repo_duration:
+                slowest_repo_duration = repo_duration
+                slowest_repo_name = repo.name
+
+            self.write_log(
+                f"Repo: {repo.name} | total={repo_duration:.3f}s | "
+                f"metadata={metadata_duration:.3f}s | "
+                f"branch={branch_duration:.3f}s | "
+                f"state={state_duration:.3f}s | "
+                f"local={local_duration:.3f}s | "
+                f"remote={remote_duration:.3f}s | "
+                f"ui={row_ui_duration:.3f}s"
+            )
+
+        total_duration = perf_counter() - total_start
+
+        self.write_log("-" * 70)
+        self.write_log(f"Slowest repository: {slowest_repo_name or 'n/a'} ({slowest_repo_duration:.3f} sec)")
+        self.write_log(f"TOTAL scan time: {total_duration:.3f} sec")
+        self.write_log("=" * 70)
+
+        self.statusBar().showMessage(
+            f"Найдено репозиториев: {len(self.repositories)} | Сканирование: {total_duration:.2f} сек"
+        )
 
     def on_repository_selected(self):
         selected_items = self.repo_table.selectedItems()
