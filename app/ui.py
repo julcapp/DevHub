@@ -1,5 +1,4 @@
 from pathlib import Path
-from datetime import datetime
 from time import perf_counter
 
 from PySide6.QtCore import Qt, QTimer
@@ -33,6 +32,7 @@ from app.git_manager import (
 )
 from app.project_metadata import load_project_metadata
 from app.workers.git_task import GitTask
+from app.services.status_service import StatusService
 
 
 SYNC_STATE_RU = {
@@ -62,7 +62,7 @@ class MainWindow(QMainWindow):
         self.selected_repo: Path | None = None
         self.devadvisor_window: DevAdvisorWindow | None = None
         self.current_git_task = None
-        self.started_at = datetime.now()
+        self.status_service = StatusService()
 
         self.init_ui()
 
@@ -271,16 +271,23 @@ class MainWindow(QMainWindow):
         """)
 
     def update_runtime_label(self):
-        elapsed = datetime.now() - self.started_at
-        total_seconds = int(elapsed.total_seconds())
-        hours = total_seconds // 3600
-        minutes = (total_seconds % 3600) // 60
-        seconds = total_seconds % 60
+        status = self.status_service.data
 
-        started_text = self.started_at.strftime("%d.%m.%Y %H:%M:%S")
-        uptime_text = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        state_icon = {
+            "READY": "🟢",
+            "WORKING": "🟡",
+            "ERROR": "🔴",
+        }.get(status.current_state, "⚪")
+
         self.runtime_label.setText(
-            f"Запуск: {started_text} | Время работы: {uptime_text}"
+            f"{state_icon} {status.current_state} | "
+            f"LOCAL: {status.local_repositories} | "
+            f"GITHUB: {status.github_repositories} | "
+            f"⭐: {status.github_stars} | "
+            f"Scan: {status.last_scan_time:.2f} sec | "
+            f"Last Update: {status.last_update_string} | "
+            f"Запуск: {status.started_string} | "
+            f"Время работы: {status.uptime}"
         )
 
     def write_log(self, text: str):
@@ -291,6 +298,8 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Журнал очищен")
 
     def scan_repositories(self):
+        self.status_service.working()
+        self.update_runtime_label()
         total_start = perf_counter()
 
         self.repo_table.setRowCount(0)
@@ -371,6 +380,14 @@ class MainWindow(QMainWindow):
             )
 
         total_duration = perf_counter() - total_start
+        self.status_service.update_scan(
+            repositories=len(self.repositories),
+            scan_time=total_duration,
+            slowest_repo=slowest_repo_name or "n/a",
+            slowest_time=slowest_repo_duration,
+        )
+        self.status_service.ready()
+        self.update_runtime_label()
 
         self.write_log("-" * 70)
         self.write_log(f"Slowest repository: {slowest_repo_name or 'n/a'} ({slowest_repo_duration:.3f} sec)")
@@ -456,6 +473,8 @@ class MainWindow(QMainWindow):
         self.write_log(f"Команда для выбранного проекта: {command_name}")
         self.write_log("=" * 70)
 
+        self.status_service.working()
+        self.update_runtime_label()
         self.statusBar().showMessage(f"Выполняется: {command_name}...")
 
         self.fetch_button.setEnabled(False)
@@ -475,6 +494,8 @@ class MainWindow(QMainWindow):
         for line in format_result(result):
             self.write_log(line)
 
+        self.status_service.ready()
+        self.update_runtime_label()
         self.statusBar().showMessage(f"Команда выполнена: {result.status}")
 
         # Важно: scan_repositories пока остается синхронным.
@@ -485,6 +506,8 @@ class MainWindow(QMainWindow):
         self.write_log("")
         self.write_log("ERROR")
         self.write_log(error_text)
+        self.status_service.error(error_text)
+        self.update_runtime_label()
         self.statusBar().showMessage("Ошибка выполнения Git-команды")
         QMessageBox.critical(self, "Ошибка Git", error_text)
 
@@ -497,6 +520,8 @@ class MainWindow(QMainWindow):
         self.current_git_task = None
 
     def sync_all(self):
+        self.status_service.working()
+        self.update_runtime_label()
         self.log_output.clear()
         self.statusBar().showMessage("Синхронизация запущена...")
 
@@ -518,6 +543,8 @@ class MainWindow(QMainWindow):
         for line in format_summary(summary):
             self.write_log(line)
 
+        self.status_service.ready()
+        self.update_runtime_label()
         self.statusBar().showMessage(
             f"Готово: успешно {summary.success}, пропущено {summary.skipped}, ошибок {summary.errors}"
         )

@@ -3,6 +3,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from time import perf_counter
 
+from app.workspace import is_excluded_folder
+
 
 @dataclass
 class RepositoryResult:
@@ -37,24 +39,55 @@ def find_repositories(
     workspace_paths: list[str],
     exclude_folders: list[str] | None = None
 ) -> list[Path]:
-    repositories = []
-    exclude_folders = set(exclude_folders or [])
+    """
+    Finds Git repositories in configured workspace roots.
 
-    for workspace in workspace_paths:
-        root = Path(workspace)
+    Rules for Alpha:
+    - scan direct children of each root;
+    - ignore service folders such as Archive and Temp;
+    - when a DevHub-Workspace service folder is found, scan one level inside it
+      to include DevHub, DevHub-Platform and DevHub-Packages;
+    - do not perform deep recursive scanning.
+    """
+    repositories: list[Path] = []
+    seen: set[Path] = set()
+    exclude_folders = exclude_folders or []
 
-        if not root.exists():
-            continue
+    def add_repository(path: Path) -> None:
+        resolved = path.resolve()
+        if resolved in seen:
+            return
+        if (resolved / ".git").exists():
+            repositories.append(resolved)
+            seen.add(resolved)
 
-        for item in root.iterdir():
-            if item.name in exclude_folders:
+    def scan_direct_children(root: Path, allow_workspace_children: bool = True) -> None:
+        if not root.exists() or not root.is_dir():
+            return
+
+        try:
+            children = sorted(root.iterdir(), key=lambda item: item.name.lower())
+        except OSError:
+            return
+
+        for item in children:
+            if not item.is_dir():
                 continue
 
-            if item.is_dir() and (item / ".git").exists():
-                repositories.append(item)
+            if is_excluded_folder(item.name, exclude_folders):
+                continue
+
+            if (item / ".git").exists():
+                add_repository(item)
+                continue
+
+            if allow_workspace_children and item.name == "DevHub-Workspace":
+                scan_direct_children(item, allow_workspace_children=False)
+
+    for workspace in workspace_paths:
+        scan_direct_children(Path(workspace))
 
     return sorted(repositories, key=lambda repo: repo.name.lower())
-
 
 def get_branch(repo_path: Path) -> str:
     stdout, stderr, code = run_git(repo_path, ["branch", "--show-current"])
