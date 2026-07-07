@@ -32,6 +32,7 @@ from app.git_manager import (
 )
 from app.project_metadata import load_project_metadata
 from app.workers.git_task import GitTask
+from app.workers.github_task import GitHubTask
 from app.services.status_service import StatusService
 
 
@@ -62,6 +63,7 @@ class MainWindow(QMainWindow):
         self.selected_repo: Path | None = None
         self.devadvisor_window: DevAdvisorWindow | None = None
         self.current_git_task = None
+        self.current_github_task = None
         self.status_service = StatusService()
 
         self.init_ui()
@@ -96,6 +98,7 @@ class MainWindow(QMainWindow):
         self.fetch_button = QPushButton("Проверить изменения")
         self.pull_button = QPushButton("Получить изменения")
         self.push_button = QPushButton("Отправить изменения")
+        self.github_button = QPushButton("Обновить GitHub")
         self.advisor_button = QPushButton("Открыть DevAdvisor")
         self.clear_log_button = QPushButton("Очистить журнал")
 
@@ -114,6 +117,9 @@ class MainWindow(QMainWindow):
         self.push_button.setToolTip(
             "Отправляет ваши локальные Commit в удалённый репозиторий GitHub."
         )
+        self.github_button.setToolTip(
+            "Получает публичную статистику GitHub: количество репозиториев и отмеченных звёздочкой проектов."
+        )
         self.advisor_button.setToolTip(
             "Открывает отдельное рабочее пространство DevAdvisor для инженерного анализа проекта."
         )
@@ -126,6 +132,7 @@ class MainWindow(QMainWindow):
         self.fetch_button.clicked.connect(lambda: self.run_selected_git_command(["fetch", "--prune"]))
         self.pull_button.clicked.connect(lambda: self.run_selected_git_command(["pull"]))
         self.push_button.clicked.connect(lambda: self.run_selected_git_command(["push"]))
+        self.github_button.clicked.connect(self.refresh_github_stats)
         self.advisor_button.clicked.connect(self.open_devadvisor)
         self.clear_log_button.clicked.connect(self.clear_log)
 
@@ -135,6 +142,7 @@ class MainWindow(QMainWindow):
             self.fetch_button,
             self.pull_button,
             self.push_button,
+            self.github_button,
             self.advisor_button,
             self.clear_log_button
         ]:
@@ -218,6 +226,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("DevHub готов к работе")
 
         self.apply_style()
+        QTimer.singleShot(500, self.refresh_github_stats)
 
     def apply_style(self):
         self.setStyleSheet("""
@@ -453,6 +462,50 @@ class MainWindow(QMainWindow):
         self.devadvisor_window.activateWindow()
         self.statusBar().showMessage("DevAdvisor открыт")
 
+    def refresh_github_stats(self):
+        if self.current_github_task and self.current_github_task.isRunning():
+            return
+
+        username = str(self.settings.get("github_user", "")).strip()
+        if not username:
+            self.write_log("GitHub: username не указан в config/settings.json")
+            self.statusBar().showMessage("GitHub username не указан")
+            return
+
+        self.status_service.working()
+        self.update_runtime_label()
+        self.statusBar().showMessage(f"Обновление GitHub статистики: {username}...")
+        self.github_button.setEnabled(False)
+
+        self.current_github_task = GitHubTask(username, self)
+        self.current_github_task.progress.connect(self.write_log)
+        self.current_github_task.finished_success.connect(self.on_github_stats_loaded)
+        self.current_github_task.finished_error.connect(self.on_github_stats_error)
+        self.current_github_task.finished.connect(self.on_github_task_cleanup)
+        self.current_github_task.start()
+
+    def on_github_stats_loaded(self, stats):
+        self.status_service.update_github(
+            repositories=stats.repositories,
+            stars=stats.stars,
+        )
+        self.status_service.ready()
+        self.update_runtime_label()
+        self.statusBar().showMessage(
+            f"GitHub обновлён: repositories={stats.repositories}, stars={stats.stars}"
+        )
+
+    def on_github_stats_error(self, error_text: str):
+        self.write_log("GitHub ERROR")
+        self.write_log(error_text)
+        self.status_service.error(error_text)
+        self.update_runtime_label()
+        self.statusBar().showMessage("Ошибка обновления GitHub статистики")
+
+    def on_github_task_cleanup(self):
+        self.github_button.setEnabled(True)
+        self.current_github_task = None
+
     def run_selected_git_command(self, command: list[str]):
         if not self.selected_repo:
             QMessageBox.warning(self, "DevHub", "Сначала выберите проект.")
@@ -480,6 +533,7 @@ class MainWindow(QMainWindow):
         self.fetch_button.setEnabled(False)
         self.pull_button.setEnabled(False)
         self.push_button.setEnabled(False)
+        self.github_button.setEnabled(False)
         self.sync_button.setEnabled(False)
         self.scan_button.setEnabled(False)
 
@@ -515,6 +569,7 @@ class MainWindow(QMainWindow):
         self.fetch_button.setEnabled(True)
         self.pull_button.setEnabled(True)
         self.push_button.setEnabled(True)
+        self.github_button.setEnabled(True)
         self.sync_button.setEnabled(True)
         self.scan_button.setEnabled(True)
         self.current_git_task = None
