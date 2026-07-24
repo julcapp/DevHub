@@ -17,6 +17,7 @@ class DevHubMainWindow(MainWindow):
     def __init__(self) -> None:
         super().__init__()
         self._allow_close = False
+        self.github_technologies = []
         self.engineering_intelligence_window: EngineeringIntelligenceWindow | None = None
         self.lifecycle = ApplicationLifecycleManager(self)
         self._install_exit_button()
@@ -74,10 +75,14 @@ class DevHubMainWindow(MainWindow):
         if self.engineering_intelligence_window is None:
             self.engineering_intelligence_window = EngineeringIntelligenceWindow(
                 stars_count=stars_count,
+                technologies=self.github_technologies,
                 parent=self,
             )
         else:
-            self.engineering_intelligence_window.update_stars_count(stars_count)
+            self.engineering_intelligence_window.update_data(
+                stars_count,
+                self.github_technologies,
+            )
 
         if open_technology_hub:
             self.engineering_intelligence_window.open_technology_hub()
@@ -86,6 +91,16 @@ class DevHubMainWindow(MainWindow):
         self.engineering_intelligence_window.raise_()
         self.engineering_intelligence_window.activateWindow()
         self.statusBar().showMessage("Engineering Intelligence открыт")
+
+    def on_github_stats_loaded(self, stats) -> None:
+        """Keep the base status update and publish starred repositories to Technology Hub."""
+        super().on_github_stats_loaded(stats)
+        self.github_technologies = list(getattr(stats, "starred_repositories", []))
+        if self.engineering_intelligence_window is not None:
+            self.engineering_intelligence_window.update_data(
+                stats.stars,
+                self.github_technologies,
+            )
 
     def request_exit(self) -> None:
         if self.lifecycle.shutdown_started:
@@ -110,8 +125,6 @@ class DevHubMainWindow(MainWindow):
 
         self.lifecycle.shutdown(dialog.set_step)
         self._allow_close = True
-
-        # Keep the completed state visible briefly without blocking shutdown work.
         QTimer.singleShot(350, lambda: self._finish_exit(dialog))
 
     def _finish_exit(self, dialog: ShutdownDialog) -> None:
@@ -123,7 +136,6 @@ class DevHubMainWindow(MainWindow):
         if self._allow_close:
             event.accept()
             return
-
         event.ignore()
         self.request_exit()
 
@@ -152,7 +164,6 @@ def install_research_evolution_center(window: DevHubMainWindow) -> None:
 def main() -> None:
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(True)
-
     window = DevHubMainWindow()
     install_research_evolution_center(window)
     window.show()
