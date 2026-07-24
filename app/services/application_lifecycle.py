@@ -97,7 +97,11 @@ class ApplicationLifecycleManager:
         report.forced_tasks += int(self._stop_thread(getattr(self.window, "current_github_task", None)))
 
         step("Закрытие дочерних окон", 70)
-        for attribute_name in ("devadvisor_window", "research_evolution_window"):
+        for attribute_name in (
+            "devadvisor_window",
+            "research_evolution_window",
+            "engineering_intelligence_window",
+        ):
             child = getattr(self.window, attribute_name, None)
             if child is not None:
                 child.close()
