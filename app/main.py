@@ -1,26 +1,30 @@
 import sys
 
-from PySide6.QtCore import QThread
+from PySide6.QtCore import QTimer
 from PySide6.QtGui import QAction, QCloseEvent
 from PySide6.QtWidgets import QApplication, QMessageBox, QPushButton
 
 from app.research_evolution_window import ResearchEvolutionWindow
+from app.services.application_lifecycle import ApplicationLifecycleManager
+from app.shutdown_dialog import ShutdownDialog
 from app.ui import MainWindow
 
 
 class DevHubMainWindow(MainWindow):
-    """Main window with one controlled shutdown path for every exit action."""
+    """Main window controlled by the central application lifecycle manager."""
 
     def __init__(self) -> None:
         super().__init__()
-        self._shutdown_in_progress = False
+        self._allow_close = False
+        self.lifecycle = ApplicationLifecycleManager(self)
         self._install_exit_button()
+        self.lifecycle.startup()
 
     def _install_exit_button(self) -> None:
         self.exit_button = QPushButton("ВЫХОД")
         self.exit_button.setObjectName("ExitButton")
         self.exit_button.setToolTip(
-            "Корректно завершает DevHub, закрывает дочерние окна и останавливает фоновые задачи."
+            "Безопасно завершает DevHub, сохраняет сессию и останавливает фоновые задачи."
         )
         self.exit_button.setMinimumWidth(110)
         self.exit_button.clicked.connect(self.request_exit)
@@ -37,72 +41,58 @@ class DevHubMainWindow(MainWindow):
                 background-color: #b3261e;
                 color: white;
             }
-            QPushButton#ExitButton:hover {
-                background-color: #8f1d1d;
-            }
-            QPushButton#ExitButton:pressed {
-                background-color: #6f1515;
-            }
+            QPushButton#ExitButton:hover { background-color: #8f1d1d; }
+            QPushButton#ExitButton:pressed { background-color: #6f1515; }
             """
         )
 
     def request_exit(self) -> None:
+        if self.lifecycle.shutdown_started:
+            return
+
         answer = QMessageBox.question(
             self,
             "Выход из DevHub",
             "Завершить работу DevHub?\n\n"
-            "Открытые окна будут закрыты, фоновые операции — остановлены, "
+            "Рабочее пространство будет сохранено, фоновые операции — остановлены, "
             "ресурсы приложения — освобождены.",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
-        if answer == QMessageBox.Yes:
-            self.close()
-
-    def _stop_task(self, task: QThread | None, task_name: str) -> None:
-        if task is None or not task.isRunning():
+        if answer != QMessageBox.Yes:
             return
 
-        self.statusBar().showMessage(f"Остановка задачи: {task_name}...")
-        task.requestInterruption()
-        task.quit()
-
-        # Most operations end normally. The timeout prevents DevHub from
-        # remaining in Windows Task Manager because of a blocked worker.
-        if not task.wait(3000):
-            task.terminate()
-            task.wait(1000)
-
-    def shutdown(self) -> None:
-        if self._shutdown_in_progress:
-            return
-        self._shutdown_in_progress = True
         self.exit_button.setEnabled(False)
-        self.runtime_timer.stop()
+        dialog = ShutdownDialog(self)
+        dialog.show()
+        QApplication.processEvents()
 
-        self._stop_task(self.current_git_task, "Git")
-        self._stop_task(self.current_github_task, "GitHub")
+        self.lifecycle.shutdown(dialog.set_step)
+        self._allow_close = True
 
-        if self.devadvisor_window is not None:
-            self.devadvisor_window.close()
+        # Keep the completed state visible briefly without blocking shutdown work.
+        QTimer.singleShot(350, lambda: self._finish_exit(dialog))
 
-        research_window = getattr(self, "research_evolution_window", None)
-        if research_window is not None:
-            research_window.close()
-
-        app = QApplication.instance()
-        if app is not None:
-            app.closeAllWindows()
+    def _finish_exit(self, dialog: ShutdownDialog) -> None:
+        dialog.close()
+        self.close()
+        self.lifecycle.quit_application()
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        self.shutdown()
-        event.accept()
+        if self._allow_close:
+            event.accept()
+            return
+
+        event.ignore()
+        self.request_exit()
 
 
-def install_research_evolution_center(window: MainWindow) -> None:
+def install_research_evolution_center(window: DevHubMainWindow) -> None:
     window.research_evolution_window = None
 
     def open_center() -> None:
+        if not window.lifecycle.can_start_task():
+            return
         if window.research_evolution_window is None:
             window.research_evolution_window = ResearchEvolutionWindow()
         window.research_evolution_window.show()
@@ -124,8 +114,6 @@ def main() -> None:
 
     window = DevHubMainWindow()
     install_research_evolution_center(window)
-    app.aboutToQuit.connect(window.shutdown)
-
     window.show()
     sys.exit(app.exec())
 
