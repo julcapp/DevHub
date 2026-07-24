@@ -20,41 +20,33 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.fork_wizard import ForkWizard
+from app.models.technology_profile import TechnologyProfile, TechnologyStatus
 from app.providers.github_provider import StarredRepository
+from app.services.technology_profile_service import TechnologyProfileService
 
 
 SECTIONS = [
-    ("🏠", "Dashboard"),
-    ("⭐", "Technology Hub"),
-    ("📚", "Knowledge Base"),
-    ("🧠", "AI Advisor"),
-    ("🔬", "Research Lab"),
-    ("🚀", "Evolution"),
-    ("🏗", "Architecture"),
-    ("📦", "Components"),
-    ("📖", "Documentation"),
-    ("📊", "Analytics"),
-    ("⚙", "Integrations"),
-    ("🗂", "Internal Projects"),
+    ("🏠", "Dashboard"), ("⭐", "Technology Hub"), ("📚", "Knowledge Base"),
+    ("🧠", "AI Advisor"), ("🔬", "Research Lab"), ("🚀", "Evolution"),
+    ("🏗", "Architecture"), ("📦", "Components"), ("📖", "Documentation"),
+    ("📊", "Analytics"), ("⚙", "Integrations"), ("🗂", "Internal Projects"),
 ]
 
 
 class EngineeringIntelligenceWindow(QMainWindow):
-    """Engineering knowledge workspace with a usable Technology Hub."""
+    """Engineering knowledge workspace and technology lifecycle manager."""
 
-    def __init__(
-        self,
-        stars_count: int = 0,
-        technologies: list[StarredRepository] | None = None,
-        parent=None,
-    ) -> None:
+    def __init__(self, stars_count: int = 0, technologies=None, parent=None) -> None:
         super().__init__(parent)
         self.stars_count = stars_count
-        self.technologies = technologies or []
+        self.technologies: list[StarredRepository] = technologies or []
         self.filtered_technologies: list[StarredRepository] = []
         self.selected_technology: StarredRepository | None = None
+        self.profile_service = TechnologyProfileService()
+        self.profiles = self.profile_service.load_all()
         self.setWindowTitle("DevHub — Engineering Intelligence")
-        self.resize(1240, 800)
+        self.resize(1280, 820)
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -62,17 +54,14 @@ class EngineeringIntelligenceWindow(QMainWindow):
         layout = QHBoxLayout(root)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-
         self.navigation = QListWidget()
         self.navigation.setObjectName("IntelligenceNavigation")
         self.navigation.setFixedWidth(245)
         for icon, title in SECTIONS:
             QListWidgetItem(f"{icon}  {title}", self.navigation)
-
         self.pages = QStackedWidget()
         for _, title in SECTIONS:
             self.pages.addWidget(self._create_page(title))
-
         self.navigation.currentRowChanged.connect(self.pages.setCurrentIndex)
         self.navigation.setCurrentRow(0)
         layout.addWidget(self.navigation)
@@ -83,38 +72,29 @@ class EngineeringIntelligenceWindow(QMainWindow):
     def _create_page(self, title: str) -> QWidget:
         if title == "Technology Hub":
             return self._create_technology_hub_page()
-
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(32, 28, 32, 28)
         layout.setSpacing(18)
-
         heading = QLabel(title)
         heading.setObjectName("PageHeading")
         layout.addWidget(heading)
-
         if title == "Dashboard":
-            subtitle = QLabel(
-                "Единый центр инженерных знаний, технологий, архитектуры и развития проектов DevHub."
-            )
+            subtitle = QLabel("Единый центр инженерных знаний, технологий, архитектуры и развития проектов DevHub.")
             subtitle.setObjectName("PageSubtitle")
             subtitle.setWordWrap(True)
             layout.addWidget(subtitle)
             cards = QHBoxLayout()
             cards.addWidget(self._metric_card("GitHub Stars", str(self.stars_count), "⭐"))
             cards.addWidget(self._metric_card("Technologies", str(len(self.technologies)), "🧩"))
-            cards.addWidget(self._metric_card("AI Analyses", "0", "🧠"))
+            cards.addWidget(self._metric_card("Internal Profiles", str(len(self.profiles)), "📘"))
             cards.addWidget(self._metric_card("Evolution Tasks", "0", "🚀"))
             layout.addLayout(cards)
         else:
-            text = QLabel(
-                "Раздел подготовлен в архитектуре Engineering Intelligence. "
-                "Данные и рабочие инструменты будут подключаться поэтапно."
-            )
+            text = QLabel("Раздел подготовлен в архитектуре Engineering Intelligence. Данные и рабочие инструменты будут подключаться поэтапно.")
             text.setWordWrap(True)
             text.setObjectName("PageBody")
             layout.addWidget(text)
-
         layout.addStretch()
         return page
 
@@ -123,12 +103,9 @@ class EngineeringIntelligenceWindow(QMainWindow):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(26, 24, 26, 24)
         layout.setSpacing(14)
-
         heading = QLabel("Technology Hub")
         heading.setObjectName("PageHeading")
-        subtitle = QLabel(
-            "Библиотека starred-репозиториев GitHub: изучение, классификация, форк и создание собственной ветки развития."
-        )
+        subtitle = QLabel("Библиотека технологий: исследование, оценка, внешний контекст, Fork и собственная ветка развития.")
         subtitle.setObjectName("PageSubtitle")
         subtitle.setWordWrap(True)
         layout.addWidget(heading)
@@ -139,10 +116,15 @@ class EngineeringIntelligenceWindow(QMainWindow):
         self.technology_search.setPlaceholderText("Поиск по названию, владельцу, описанию или теме...")
         self.technology_language = QComboBox()
         self.technology_language.addItem("Все языки")
-        self.technology_search.textChanged.connect(self._filter_technologies)
-        self.technology_language.currentTextChanged.connect(self._filter_technologies)
+        self.status_filter = QComboBox()
+        self.status_filter.addItem("Все статусы")
+        self.status_filter.addItems([status.value for status in TechnologyStatus])
+        self.technology_search.textChanged.connect(self._rebuild_technology_list)
+        self.technology_language.currentTextChanged.connect(self._rebuild_technology_list)
+        self.status_filter.currentTextChanged.connect(self._rebuild_technology_list)
         filters.addWidget(self.technology_search, 1)
         filters.addWidget(self.technology_language)
+        filters.addWidget(self.status_filter)
         layout.addLayout(filters)
 
         splitter = QSplitter(Qt.Horizontal)
@@ -154,18 +136,20 @@ class EngineeringIntelligenceWindow(QMainWindow):
         detail_layout = QVBoxLayout(detail)
         self.technology_title = QLabel("Выберите технологию")
         self.technology_title.setObjectName("TechnologyTitle")
-        self.technology_meta = QLabel("После синхронизации здесь появится паспорт starred-репозитория.")
+        self.technology_meta = QLabel("После синхронизации здесь появится паспорт технологии.")
         self.technology_meta.setObjectName("PageSubtitle")
         self.technology_meta.setWordWrap(True)
+        self.profile_status = QComboBox()
+        self.profile_status.addItems([status.value for status in TechnologyStatus])
+        self.profile_status.currentTextChanged.connect(self._save_selected_status)
         self.technology_description = QTextEdit()
         self.technology_description.setReadOnly(True)
-        self.technology_description.setPlaceholderText("Описание технологии")
 
         actions = QHBoxLayout()
         self.open_github_button = QPushButton("Открыть GitHub")
-        self.fork_button = QPushButton("Fork → собственный проект")
+        self.fork_button = QPushButton("Create Development Fork")
         self.open_github_button.clicked.connect(self._open_selected_on_github)
-        self.fork_button.clicked.connect(self._show_fork_plan)
+        self.fork_button.clicked.connect(self._open_fork_wizard)
         self.open_github_button.setEnabled(False)
         self.fork_button.setEnabled(False)
         actions.addWidget(self.open_github_button)
@@ -174,13 +158,15 @@ class EngineeringIntelligenceWindow(QMainWindow):
 
         detail_layout.addWidget(self.technology_title)
         detail_layout.addWidget(self.technology_meta)
+        detail_layout.addWidget(QLabel("Внутренний статус DevHub"))
+        detail_layout.addWidget(self.profile_status)
         detail_layout.addWidget(self.technology_description, 1)
         detail_layout.addLayout(actions)
-
         splitter.addWidget(self.technology_list)
         splitter.addWidget(detail)
-        splitter.setSizes([390, 700])
+        splitter.setSizes([400, 720])
         layout.addWidget(splitter, 1)
+        self._refresh_language_filter()
         self._rebuild_technology_list()
         return page
 
@@ -218,46 +204,42 @@ class EngineeringIntelligenceWindow(QMainWindow):
         self.technology_language.clear()
         self.technology_language.addItem("Все языки")
         self.technology_language.addItems(languages)
-        index = self.technology_language.findText(selected)
-        self.technology_language.setCurrentIndex(max(index, 0))
+        self.technology_language.setCurrentIndex(max(self.technology_language.findText(selected), 0))
         self.technology_language.blockSignals(False)
 
-    def _filter_technologies(self) -> None:
-        self._rebuild_technology_list()
+    def _profile_for(self, technology: StarredRepository) -> TechnologyProfile:
+        return self.profile_service.get_or_create(self.profiles, technology.full_name)
 
     def _rebuild_technology_list(self) -> None:
         if not hasattr(self, "technology_list"):
             return
-        query = self.technology_search.text().strip().lower() if hasattr(self, "technology_search") else ""
-        language = self.technology_language.currentText() if hasattr(self, "technology_language") else "Все языки"
+        query = self.technology_search.text().strip().lower()
+        language = self.technology_language.currentText()
+        status = self.status_filter.currentText()
         self.filtered_technologies = []
         self.technology_list.clear()
-
         for technology in self.technologies:
-            searchable = " ".join(
-                [technology.full_name, technology.description, technology.language, " ".join(technology.topics)]
-            ).lower()
+            profile = self._profile_for(technology)
+            searchable = " ".join([technology.full_name, technology.description, technology.language, " ".join(technology.topics)]).lower()
             if query and query not in searchable:
                 continue
             if language != "Все языки" and technology.language != language:
                 continue
+            if status != "Все статусы" and profile.status.value != status:
+                continue
             self.filtered_technologies.append(technology)
             item = QListWidgetItem(
-                f"⭐ {technology.full_name}\n"
-                f"{technology.language or 'Язык не указан'} · {technology.license_name or 'License n/a'} · "
-                f"★ {technology.stars}"
+                f"⭐ {technology.full_name}\n{profile.status.value} · {technology.language or 'Язык n/a'} · "
+                f"{technology.license_name or 'License n/a'} · ★ {technology.stars}"
             )
             item.setToolTip(technology.description or technology.full_name)
             self.technology_list.addItem(item)
-
         if self.filtered_technologies:
             self.technology_list.setCurrentRow(0)
         else:
             self.selected_technology = None
             self.technology_title.setText("Технологии не найдены")
-            self.technology_meta.setText(
-                "Обновите GitHub-статистику или измените параметры поиска."
-            )
+            self.technology_meta.setText("Обновите GitHub-статистику или измените фильтры.")
             self.technology_description.clear()
             self.open_github_button.setEnabled(False)
             self.fork_button.setEnabled(False)
@@ -266,67 +248,82 @@ class EngineeringIntelligenceWindow(QMainWindow):
         if row < 0 or row >= len(self.filtered_technologies):
             return
         technology = self.filtered_technologies[row]
+        profile = self._profile_for(technology)
         self.selected_technology = technology
         self.technology_title.setText(technology.full_name)
         self.technology_meta.setText(
-            f"Язык: {technology.language or 'не указан'}   |   "
-            f"Лицензия: {technology.license_name or 'не указана'}   |   "
-            f"Stars: {technology.stars}   |   Forks: {technology.forks}   |   "
-            f"Issues: {technology.open_issues}\n"
-            f"Основная ветка: {technology.default_branch}   |   Обновлено: {technology.updated_at or 'n/a'}"
+            f"Язык: {technology.language or 'не указан'} | Лицензия: {technology.license_name or 'не указана'} | "
+            f"Stars: {technology.stars} | Forks: {technology.forks} | Issues: {technology.open_issues}\n"
+            f"Основная ветка: {technology.default_branch} | Обновлено: {technology.updated_at or 'n/a'}"
         )
+        self.profile_status.blockSignals(True)
+        self.profile_status.setCurrentText(profile.status.value)
+        self.profile_status.blockSignals(False)
         topics = ", ".join(technology.topics) if technology.topics else "не указаны"
+        internet = profile.internet_summary or "Внешняя информация ещё не собрана. Источники будут храниться отдельно от официальных данных GitHub."
+        internal = profile.internal_notes or "Внутренний опыт пока не зафиксирован."
+        score = profile.score.total()
         self.technology_description.setPlainText(
-            f"Описание\n{technology.description or 'Описание отсутствует.'}\n\n"
-            f"Topics\n{topics}\n\n"
-            "Статус DevHub\n🟡 Изучается\n\n"
-            "Дальнейшие возможности\n"
-            "• импорт README, Releases и документации;\n"
-            "• AI-анализ применимости;\n"
-            "• связь с внутренними проектами;\n"
-            "• создание управляемого форка и собственной ветки развития."
+            f"ОФИЦИАЛЬНЫЕ ДАННЫЕ\n{technology.description or 'Описание отсутствует.'}\n\n"
+            f"Topics: {topics}\nClone URL: {technology.clone_url}\n\n"
+            f"INTERNET INTELLIGENCE\n{internet}\n\n"
+            f"DEVHUB EXPERIENCE\n{internal}\n\n"
+            f"DEVHUB TECHNOLOGY SCORE\n{score} / 10\n\n"
+            f"EVOLUTION\nFork: {profile.fork_repository or 'не создан'}\n"
+            f"Upstream: {profile.upstream_repository or technology.full_name}\n"
+            f"Ветка развития: {profile.evolution_branch or 'не создана'}"
         )
         self.open_github_button.setEnabled(bool(technology.html_url))
         self.fork_button.setEnabled(bool(technology.full_name))
+
+    def _save_selected_status(self, value: str) -> None:
+        if self.selected_technology is None:
+            return
+        profile = self._profile_for(self.selected_technology)
+        profile.status = TechnologyStatus(value)
+        self.profile_service.save_all(self.profiles)
+        current_name = self.selected_technology.full_name
+        self._rebuild_technology_list()
+        for row, technology in enumerate(self.filtered_technologies):
+            if technology.full_name == current_name:
+                self.technology_list.setCurrentRow(row)
+                break
 
     def _open_selected_on_github(self) -> None:
         if self.selected_technology and self.selected_technology.html_url:
             QDesktopServices.openUrl(QUrl(self.selected_technology.html_url))
 
-    def _show_fork_plan(self) -> None:
+    def _open_fork_wizard(self) -> None:
         technology = self.selected_technology
         if technology is None:
             return
-        proposed_branch = f"devhub/evolution-{technology.name.lower().replace('_', '-')}"
+        parent = self.parent()
+        github_user = str(getattr(parent, "settings", {}).get("github_user", "")) if parent else ""
+        wizard = ForkWizard(technology, github_user=github_user, parent=self)
+        if wizard.exec() != ForkWizard.Accepted:
+            return
+        plan = wizard.plan()
+        profile = self._profile_for(technology)
+        profile.status = TechnologyStatus.PLANNED
+        profile.fork_repository = f"{plan.target_owner}/{plan.target_name}"
+        profile.upstream_repository = technology.full_name
+        profile.evolution_branch = plan.evolution_branch
+        self.profile_service.save_all(self.profiles)
+        self._show_technology(self.filtered_technologies.index(technology))
         QMessageBox.information(
             self,
-            "Fork и собственная ветка развития",
-            f"Источник: {technology.full_name}\n"
-            f"Основная ветка источника: {technology.default_branch}\n"
-            f"Предлагаемая ветка развития: {proposed_branch}\n\n"
-            "Безопасный сценарий DevHub:\n"
-            "1. Проверить лицензию и ограничения использования.\n"
-            "2. Создать Fork в вашем GitHub-аккаунте.\n"
-            "3. Клонировать Fork в отдельную рабочую папку.\n"
-            "4. Добавить исходный репозиторий как remote upstream.\n"
-            "5. Создать отдельную ветку развития.\n"
-            "6. Зарегистрировать проект в Internal Projects.\n"
-            "7. Сохранить происхождение, лицензию и историю синхронизации.\n\n"
-            "На следующем этапе добавим мастер выполнения с GitHub-токеном, выбором имени, "
-            "папки и ветки. До подтверждения пользователя DevHub ничего не создаёт.",
+            "Fork Wizard",
+            "План сохранён в карточке технологии. Репозиторий ещё не создан. "
+            "Исполнение будет добавлено после подключения безопасной GitHub-авторизации.",
         )
 
     def open_technology_hub(self) -> None:
         self.navigation.setCurrentRow(1)
 
     def _apply_style(self) -> None:
-        self.setStyleSheet(
-            """
+        self.setStyleSheet("""
             QMainWindow, QWidget { background: #f5f7fa; }
-            QListWidget#IntelligenceNavigation {
-                background: #1f2937; color: #f9fafb; border: none;
-                padding: 14px 8px; font-size: 14px;
-            }
+            QListWidget#IntelligenceNavigation { background: #1f2937; color: #f9fafb; border: none; padding: 14px 8px; font-size: 14px; }
             QListWidget#IntelligenceNavigation::item { padding: 12px 14px; margin: 2px 0; border-radius: 6px; }
             QListWidget#IntelligenceNavigation::item:selected { background: #374151; color: white; }
             QListWidget#TechnologyList { background: white; border: 1px solid #d1d5db; font-size: 13px; }
@@ -342,5 +339,4 @@ class EngineeringIntelligenceWindow(QMainWindow):
             QLabel#MetricTitle { font-size: 13px; color: #6b7280; }
             QLineEdit, QComboBox, QTextEdit { background: white; border: 1px solid #cbd5e1; border-radius: 5px; padding: 7px; }
             QPushButton { padding: 8px 14px; }
-            """
-        )
+        """)
