@@ -1,9 +1,10 @@
 import sys
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction, QCloseEvent
 from PySide6.QtWidgets import QApplication, QMessageBox, QPushButton
 
+from app.engineering_intelligence_window import EngineeringIntelligenceWindow
 from app.research_evolution_window import ResearchEvolutionWindow
 from app.services.application_lifecycle import ApplicationLifecycleManager
 from app.shutdown_dialog import ShutdownDialog
@@ -16,8 +17,10 @@ class DevHubMainWindow(MainWindow):
     def __init__(self) -> None:
         super().__init__()
         self._allow_close = False
+        self.engineering_intelligence_window: EngineeringIntelligenceWindow | None = None
         self.lifecycle = ApplicationLifecycleManager(self)
         self._install_exit_button()
+        self._activate_stars_entry()
         self.lifecycle.startup()
 
     def _install_exit_button(self) -> None:
@@ -45,6 +48,44 @@ class DevHubMainWindow(MainWindow):
             QPushButton#ExitButton:pressed { background-color: #6f1515; }
             """
         )
+
+    def _activate_stars_entry(self) -> None:
+        self.runtime_label.setCursor(Qt.PointingHandCursor)
+        self.runtime_label.setToolTip(
+            "Нажмите, чтобы открыть Engineering Intelligence и Technology Hub."
+        )
+        self.runtime_label.mousePressEvent = self._on_runtime_label_clicked
+
+        intelligence_menu = self.menuBar().addMenu("Intelligence")
+        action = QAction("⭐ Engineering Intelligence", self)
+        action.setToolTip("Открывает Technology Hub и инженерную базу знаний DevHub.")
+        action.triggered.connect(self.open_engineering_intelligence)
+        intelligence_menu.addAction(action)
+
+    def _on_runtime_label_clicked(self, event) -> None:
+        if event.button() == Qt.LeftButton:
+            self.open_engineering_intelligence(open_technology_hub=True)
+
+    def open_engineering_intelligence(self, open_technology_hub: bool = False) -> None:
+        if not self.lifecycle.can_start_task():
+            return
+
+        stars_count = self.status_service.data.github_stars
+        if self.engineering_intelligence_window is None:
+            self.engineering_intelligence_window = EngineeringIntelligenceWindow(
+                stars_count=stars_count,
+                parent=self,
+            )
+        else:
+            self.engineering_intelligence_window.update_stars_count(stars_count)
+
+        if open_technology_hub:
+            self.engineering_intelligence_window.open_technology_hub()
+
+        self.engineering_intelligence_window.show()
+        self.engineering_intelligence_window.raise_()
+        self.engineering_intelligence_window.activateWindow()
+        self.statusBar().showMessage("Engineering Intelligence открыт")
 
     def request_exit(self) -> None:
         if self.lifecycle.shutdown_started:
