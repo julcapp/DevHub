@@ -1,0 +1,26 @@
+id: devhub.identity
+name: Identity Core
+version: 0.1.0
+status: development
+type: core-module
+api: "0.1"
+
+contracts:
+  exports:
+    - IdentityStrategy
+    - IdentityProvider
+    - IdentityRegistry
+    - Clock
+    - MetricsCollector
+    - EventPublisher
+
+capabilities:
+  - generate_identity
+
+quality:
+  tests: false
+  coverage: 0
+
+documentation:
+  readme: README.md
+  changelog: CHANGELOG.md
