@@ -33,4 +33,4 @@ jobs:
           python -m pip install pytest
 
       - name: Run platform core tests
-        run: python -m pytest tests/test_resource_engine.py tests/test_capability_engine.py tests/test_event_bus.py tests/test_workflow_engine.py -q
+        run: python -m pytest tests/test_resource_engine.py tests/test_capability_engine.py tests/test_event_bus.py tests/test_workflow_engine.py tests/test_scheduler.py -q
