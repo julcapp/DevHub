@@ -13,6 +13,10 @@ class IdentityCollisionError(IdentityError):
     """Raised when a generated identity already exists."""
 
 
+class IdentityNotFoundError(IdentityError):
+    """Raised when an identity descriptor cannot be resolved."""
+
+
 class ParseIdentityError(IdentityError):
     """Raised when a serialized identity cannot be parsed."""
 
