@@ -21,7 +21,7 @@ addopts = "--strict-markers --strict-config"
 
 [tool.coverage.run]
 branch = true
-source = ["devhub.identity"]
+source = ["devhub.identity", "devhub.runtime"]
 
 [tool.coverage.report]
 show_missing = true
@@ -40,5 +40,5 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 python_version = "3.11"
 strict = true
 mypy_path = "src"
-packages = ["devhub.identity"]
+packages = ["devhub.identity", "devhub.runtime"]
 warn_unused_configs = true
