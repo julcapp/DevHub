@@ -11,5 +11,8 @@ All notable changes to Identity Core will be documented in this file.
 - Identity Core exception hierarchy and pure validators.
 - Thread-safe `SequentialStrategy` with independent counters per entity type.
 - Thread-safe `InMemoryProvider` with collision detection.
-- Domain, architecture, contract, and infrastructure tests.
+- Registry, system clock, and application service orchestration.
+- Lazy bootstrap composition root with service override support.
+- Frozen public facade: `generate`, `parse`, `validate`, and `describe`.
+- Domain, architecture, contract, infrastructure, service, and facade tests.
 - Module manifest and module documentation.
