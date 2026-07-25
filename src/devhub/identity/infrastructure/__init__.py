@@ -1,4 +1,6 @@
-"""Infrastructure adapters of Identity Core.
+"""Infrastructure adapters of Identity Core."""
 
-Provider and strategy implementations are introduced in PR-003 Commit 3.
-"""
+from devhub.identity.infrastructure.in_memory_provider import InMemoryProvider
+from devhub.identity.infrastructure.sequential_strategy import SequentialStrategy
+
+__all__ = ["InMemoryProvider", "SequentialStrategy"]
