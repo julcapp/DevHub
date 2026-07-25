@@ -14,6 +14,7 @@ from devhub.runtime.domain.exceptions import (
     ModuleLoadError,
     ModuleNotLoadedError,
 )
+from devhub.runtime.domain.manifest import ModuleManifest
 from devhub.runtime.domain.models import (
     Capability,
     HealthCheck,
@@ -43,6 +44,7 @@ __all__ = [
     "MetadataError",
     "ModuleAlreadyLoadedError",
     "ModuleLoadError",
+    "ModuleManifest",
     "ModuleMetadata",
     "ModuleMetrics",
     "ModuleNotLoadedError",
