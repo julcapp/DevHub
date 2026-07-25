@@ -5,6 +5,7 @@ from devhub.identity.domain.entity_type import EntityType
 from devhub.identity.domain.exceptions import (
     IdentityCollisionError,
     IdentityError,
+    IdentityNotFoundError,
     InvalidEntityTypeError,
     InvalidIdentityError,
     ParseIdentityError,
@@ -19,6 +20,7 @@ __all__ = [
     "IdentityCollisionError",
     "IdentityDescriptor",
     "IdentityError",
+    "IdentityNotFoundError",
     "InvalidEntityTypeError",
     "InvalidIdentityError",
     "ParseIdentityError",
