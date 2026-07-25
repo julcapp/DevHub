@@ -4,7 +4,7 @@ from threading import RLock
 
 from devhub.identity.contracts.identity_provider import IdentityProvider
 from devhub.identity.contracts.identity_strategy import IdentityStrategy
-from devhub.identity.domain.exceptions import UnknownStrategyError
+from devhub.identity.domain.exceptions import UnknownProviderError, UnknownStrategyError
 from devhub.identity.domain.validator import validate_strategy_name
 
 
@@ -54,6 +54,6 @@ class DefaultIdentityRegistry:
             try:
                 return self._providers[normalized_name]
             except KeyError as error:
-                raise LookupError(
+                raise UnknownProviderError(
                     f"Identity provider '{normalized_name}' is not registered."
                 ) from error
