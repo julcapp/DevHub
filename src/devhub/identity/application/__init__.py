@@ -1,4 +1,6 @@
-"""Application services of Identity Core.
+"""Application services of Identity Core."""
 
-Service implementation is introduced in PR-003 Commit 4.
-"""
+from devhub.identity.application.registry import DefaultIdentityRegistry
+from devhub.identity.application.service import IdentityService
+
+__all__ = ["DefaultIdentityRegistry", "IdentityService"]
