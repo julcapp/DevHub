@@ -1,5 +1,6 @@
 """Public Runtime domain vocabulary."""
 
+from devhub.runtime.domain.dependency import DependencyGraph, ExecutionLevel, ExecutionPlan
 from devhub.runtime.domain.exceptions import (
     CapabilityError,
     CircularDependencyError,
@@ -32,8 +33,11 @@ __all__ = [
     "CapabilityError",
     "CircularDependencyError",
     "DependencyError",
+    "DependencyGraph",
     "DevHubRuntimeError",
     "DiscoveryError",
+    "ExecutionLevel",
+    "ExecutionPlan",
     "HealthCheck",
     "HealthCheckError",
     "HealthReport",
