@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from devhub.identity.domain.exceptions import ParseIdentityError
+from devhub.identity.domain.exceptions import InvalidIdentityError, ParseIdentityError
 from devhub.identity.domain.validator import validate_identity_value
 
 
@@ -25,13 +25,9 @@ class EntityId:
 
     @classmethod
     def parse(cls, raw: str) -> "EntityId":
-        """Parse an identifier and normalize validation errors."""
+        """Parse an identifier and expose a parse-specific domain error."""
 
         try:
             return cls(raw)
-        except Exception as error:
-            from devhub.identity.domain.exceptions import IdentityError
-
-            if isinstance(error, IdentityError):
-                raise ParseIdentityError(str(error)) from error
-            raise
+        except InvalidIdentityError as error:
+            raise ParseIdentityError(str(error)) from error
