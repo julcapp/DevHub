@@ -4,6 +4,7 @@ from devhub.identity.contracts.clock import Clock
 from devhub.identity.contracts.identity_registry import IdentityRegistry
 from devhub.identity.domain.entity_id import EntityId
 from devhub.identity.domain.entity_type import EntityType
+from devhub.identity.domain.exceptions import InvalidEntityTypeError
 from devhub.identity.domain.identity_descriptor import IdentityDescriptor
 
 
@@ -27,7 +28,7 @@ class IdentityService:
         """Generate and persist one identity descriptor."""
 
         if not isinstance(entity_type, EntityType):
-            raise TypeError("entity_type must be an EntityType")
+            raise InvalidEntityTypeError("entity_type must be an EntityType")
 
         strategy = self._registry.get_strategy(self._strategy_name)
         provider = self._registry.get_provider(self._provider_name)
