@@ -1,4 +1,25 @@
-"""Domain model of Identity Core.
+"""Public domain model of Identity Core."""
 
-Domain implementation is introduced in PR-003 Commit 2.
-"""
+from devhub.identity.domain.entity_id import EntityId
+from devhub.identity.domain.entity_type import EntityType
+from devhub.identity.domain.exceptions import (
+    IdentityCollisionError,
+    IdentityError,
+    InvalidEntityTypeError,
+    InvalidIdentityError,
+    ParseIdentityError,
+    UnknownStrategyError,
+)
+from devhub.identity.domain.identity_descriptor import IdentityDescriptor
+
+__all__ = [
+    "EntityId",
+    "EntityType",
+    "IdentityCollisionError",
+    "IdentityDescriptor",
+    "IdentityError",
+    "InvalidEntityTypeError",
+    "InvalidIdentityError",
+    "ParseIdentityError",
+    "UnknownStrategyError",
+]
