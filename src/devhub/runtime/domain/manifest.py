@@ -25,14 +25,22 @@ class ModuleManifest:
     path: Path | None = None
 
     def __post_init__(self) -> None:
-        if not _MODULE_ID.fullmatch(self.id):
+        if not isinstance(self.id, str) or not _MODULE_ID.fullmatch(self.id):
             raise ManifestError(f"Invalid module id: {self.id!r}.")
-        if not self.name.strip():
+        if not isinstance(self.name, str) or not self.name.strip():
             raise ManifestError("Module name must not be empty.")
-        if not _VERSION.fullmatch(self.version):
+        if not isinstance(self.version, str) or not _VERSION.fullmatch(self.version):
             raise ManifestError(f"Invalid semantic version: {self.version!r}.")
-        if isinstance(self.api_version, bool) or self.api_version < 1:
+        if (
+            not isinstance(self.api_version, int)
+            or isinstance(self.api_version, bool)
+            or self.api_version < 1
+        ):
             raise ManifestError("api_version must be a positive integer.")
+        if not isinstance(self.dependencies, tuple) or not all(
+            isinstance(item, str) for item in self.dependencies
+        ):
+            raise ManifestError("dependencies must be a tuple of module ids.")
         if len(set(self.dependencies)) != len(self.dependencies):
             raise ManifestError("Module dependencies must be unique.")
         if self.id in self.dependencies:
@@ -40,9 +48,14 @@ class ModuleManifest:
         for dependency in self.dependencies:
             if not _MODULE_ID.fullmatch(dependency):
                 raise ManifestError(f"Invalid dependency id: {dependency!r}.")
-        if self.entrypoint is not None and not _ENTRYPOINT.fullmatch(self.entrypoint):
+        if self.entrypoint is not None and (
+            not isinstance(self.entrypoint, str)
+            or not _ENTRYPOINT.fullmatch(self.entrypoint)
+        ):
             raise ManifestError(
                 "entrypoint must use the 'package.module:Factory' format."
             )
-        if self.path is not None and self.path.name != "module.yaml":
+        if self.path is not None and (
+            not isinstance(self.path, Path) or self.path.name != "module.yaml"
+        ):
             raise ManifestError("Manifest path must point to module.yaml.")
