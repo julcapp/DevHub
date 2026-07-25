@@ -21,5 +21,9 @@ class UnknownStrategyError(IdentityError):
     """Raised when a requested identity strategy is not registered."""
 
 
+class UnknownProviderError(IdentityError):
+    """Raised when a requested identity provider is not registered."""
+
+
 class InvalidEntityTypeError(IdentityError):
     """Raised when an entity type is not supported."""
