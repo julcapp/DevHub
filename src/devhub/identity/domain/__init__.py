@@ -8,6 +8,7 @@ from devhub.identity.domain.exceptions import (
     InvalidEntityTypeError,
     InvalidIdentityError,
     ParseIdentityError,
+    UnknownProviderError,
     UnknownStrategyError,
 )
 from devhub.identity.domain.identity_descriptor import IdentityDescriptor
@@ -21,5 +22,6 @@ __all__ = [
     "InvalidEntityTypeError",
     "InvalidIdentityError",
     "ParseIdentityError",
+    "UnknownProviderError",
     "UnknownStrategyError",
 ]
