@@ -1,3 +1,10 @@
 """Universal identity subsystem for DevHub."""
 
-__all__: list[str] = []
+from devhub.identity.facade import describe, generate, parse, validate
+
+__all__ = [
+    "describe",
+    "generate",
+    "parse",
+    "validate",
+]
