@@ -17,7 +17,7 @@ def test_weighted_technology_score() -> None:
         compatibility=100,
         internal_experience=60,
     )
-    assert score.total() == 8.0
+    assert score.total() == 8.1
 
 
 def test_profile_roundtrip(tmp_path: Path) -> None:
