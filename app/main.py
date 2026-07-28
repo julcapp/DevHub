@@ -1,11 +1,17 @@
 import sys
+
 from PySide6.QtWidgets import QApplication
+
 from app.ui import MainWindow
+from core.bootstrap.bootstrap import Bootstrap
 
 
-def main():
+def main() -> None:
     app = QApplication(sys.argv)
-    window = MainWindow()
+    bootstrap = Bootstrap(MainWindow)
+    app.aboutToQuit.connect(bootstrap.shutdown)
+
+    window = bootstrap.run()
     window.show()
     sys.exit(app.exec())
 
