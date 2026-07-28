@@ -37,6 +37,7 @@ class Kernel:
 
     def start(self) -> KernelMetrics:
         started_at = perf_counter()
+        successful = False
         try:
             self.services.validate_dependencies()
             for service in self.services:
@@ -51,7 +52,6 @@ class Kernel:
         except Exception as error:
             self._ready = False
             self.events.publish(Event("KernelStartupFailed", {"error": str(error)}))
-            successful = False
             raise
         finally:
             self.metrics = KernelMetrics(
