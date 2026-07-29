@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.platform import PlatformKernel
+from app.workspaces.git import GitWorkspace
 
 
 class PlaceholderWorkspace(QWidget):
@@ -146,7 +147,7 @@ class DevHubShell(QMainWindow):
             ("Исследования", lambda: PlaceholderWorkspace("Исследования", "Гипотезы, эксперименты, выводы и доказательства.")),
             ("Архитектура", lambda: PlaceholderWorkspace("Архитектура", "ADR, спецификации, компоненты и архитектурные проверки.")),
             ("Документация", lambda: PlaceholderWorkspace("Документация", "Структурированные документы как инженерные активы.")),
-            ("Разработка", lambda: PlaceholderWorkspace("Разработка", "Git, GitHub, CI/CD и контроль реализации.")),
+            ("Разработка", lambda: GitWorkspace()),
             ("AI", lambda: PlaceholderWorkspace("AI", "Engineering Intelligence Layer и специализированные агенты.")),
             ("Аналитика", lambda: PlaceholderWorkspace("Аналитика", "Состояние проектов, риски, зрелость и динамика.")),
             ("Инновации", lambda: PlaceholderWorkspace("Инновации", "Портфель идей, исследований и новых продуктов.")),
