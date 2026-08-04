@@ -1,6 +1,8 @@
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from app.workspaces.git import controller as controller_module
 from app.workspaces.git.controller import GitWorkspaceController
 
@@ -65,3 +67,36 @@ def test_scan_uses_empty_exclude_list_when_setting_is_missing(monkeypatch) -> No
 
     assert controller.scan() == []
     assert captured == {"workspace_paths": [], "exclude_folders": []}
+
+
+@pytest.mark.parametrize(
+    ("operation", "expected"),
+    [
+        ("fetch", [["fetch", "--prune"]]),
+        ("pull", [["pull"]]),
+        ("push", [["push"]]),
+        (
+            "history",
+            [["log", "-20", "--date=short", "--pretty=format:%h | %ad | %an | %s"]],
+        ),
+    ],
+)
+def test_operation_commands(operation: str, expected: list[list[str]]) -> None:
+    assert GitWorkspaceController.operation_commands(operation) == expected
+
+
+def test_commit_operation_stages_all_changes() -> None:
+    assert GitWorkspaceController.operation_commands("commit", "Fix shell") == [
+        ["add", "-A"],
+        ["commit", "-m", "Fix shell"],
+    ]
+
+
+def test_commit_operation_requires_message() -> None:
+    with pytest.raises(ValueError, match="не может быть пустым"):
+        GitWorkspaceController.operation_commands("commit", "   ")
+
+
+def test_unknown_operation_is_rejected() -> None:
+    with pytest.raises(ValueError, match="Неизвестная"):
+        GitWorkspaceController.operation_commands("rebase")
