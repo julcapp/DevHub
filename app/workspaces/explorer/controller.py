@@ -27,10 +27,9 @@ TEXT_EXTENSIONS = {
     ".ini",
     ".cfg",
     ".py",
-    ".gitignore",
 }
 
-SPECIAL_TEXT_FILES = {"LICENSE", "Dockerfile", "Makefile", ".env.example"}
+SPECIAL_TEXT_FILES = {"LICENSE", "Dockerfile", "Makefile", ".env.example", ".gitignore"}
 
 
 @dataclass(frozen=True)
