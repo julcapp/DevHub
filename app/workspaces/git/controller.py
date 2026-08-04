@@ -25,7 +25,7 @@ SYNC_STATE_RU = {
 
 
 class GitWorkspaceController:
-    """Подготавливает данные Git Workspace без зависимости от UI."""
+    """Подготавливает данные и команды Git Workspace без зависимости от UI."""
 
     def __init__(self) -> None:
         self.settings = load_settings()
@@ -55,3 +55,21 @@ class GitWorkspaceController:
                 }
             )
         return rows
+
+    @staticmethod
+    def operation_commands(operation: str, commit_message: str = "") -> list[list[str]]:
+        operations = {
+            "fetch": [["fetch", "--prune"]],
+            "pull": [["pull"]],
+            "push": [["push"]],
+            "history": [["log", "-20", "--date=short", "--pretty=format:%h | %ad | %an | %s"]],
+        }
+        if operation == "commit":
+            message = commit_message.strip()
+            if not message:
+                raise ValueError("Сообщение Commit не может быть пустым.")
+            return [["add", "-A"], ["commit", "-m", message]]
+        try:
+            return operations[operation]
+        except KeyError as error:
+            raise ValueError(f"Неизвестная Git-операция: {operation}") from error
