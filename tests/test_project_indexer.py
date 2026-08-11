@@ -97,7 +97,8 @@ def test_project_indexer_resolves_relative_internal_dependency(tmp_path: Path) -
     dependencies = graph.outgoing("module:app.services.worker", "depends_on")
     assert result.internal_dependencies_resolved == 1
     assert len(dependencies) == 1
-    assert dependencies[0].target == "module:app"
+    assert dependencies[0].target == "module:app.models"
+    assert dependencies[0].attributes["import"] == "..models"
 
 
 def test_project_indexer_rejects_missing_root(tmp_path: Path) -> None:
