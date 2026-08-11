@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.platform import PlatformKernel
+from app.workspaces.architecture import ArchitectureWorkspace
 from app.workspaces.explorer import ProjectExplorerWorkspace
 from app.workspaces.git import GitWorkspace
 from app.workspaces.notebook import EngineeringNotebookWorkspace
@@ -141,7 +142,7 @@ class DevHubShell(QMainWindow):
             ("Знания", lambda: PlaceholderWorkspace("Знания", "Инженерные активы, связи и корпоративная память.")),
             ("Идеи", lambda: EngineeringNotebookWorkspace()),
             ("Исследования", lambda: PlaceholderWorkspace("Исследования", "Гипотезы, эксперименты, выводы и доказательства.")),
-            ("Архитектура", lambda: PlaceholderWorkspace("Архитектура", "ADR, спецификации, компоненты и архитектурные проверки.")),
+            ("Архитектура", lambda: ArchitectureWorkspace()),
             ("Документация", lambda: PlaceholderWorkspace("Документация", "Структурированные документы как инженерные активы.")),
             ("Разработка", lambda: GitWorkspace()),
             ("AI", lambda: PlaceholderWorkspace("AI", "Engineering Intelligence Layer и специализированные агенты.")),
@@ -194,6 +195,7 @@ class DevHubShell(QMainWindow):
             QListWidget#Navigation::item:selected { background: #374151; color: white; }
             QLabel#WorkspaceTitle { font-size: 24px; font-weight: 700; }
             QLabel#WorkspaceDescription { font-size: 14px; color: #4b5563; padding-top: 8px; }
+            QLabel#ArchitectureMetric { font-size: 18px; font-weight: 700; }
             QFrame#InspectorFrame { background: #ffffff; border-left: 1px solid #d1d5db; }
             QLabel#PanelTitle { font-size: 15px; font-weight: 700; }
             QTextEdit, QPlainTextEdit, QTreeView, QListWidget, QLineEdit { background: white; border: 1px solid #d1d5db; border-radius: 4px; padding: 8px; }
