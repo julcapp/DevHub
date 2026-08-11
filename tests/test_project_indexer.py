@@ -1,0 +1,47 @@
+from pathlib import Path
+
+from app.indexer import ProjectIndexer
+
+
+def test_project_indexer_builds_project_folder_file_graph(tmp_path: Path) -> None:
+    app_dir = tmp_path / "app"
+    app_dir.mkdir()
+    (app_dir / "main.py").write_text("print('ok')\n", encoding="utf-8")
+    (tmp_path / "README.md").write_text("# Demo\n", encoding="utf-8")
+
+    graph, result = ProjectIndexer().build_graph(tmp_path)
+
+    assert result.files_indexed == 2
+    assert result.folders_indexed == 1
+    assert graph.get_node(result.project_id) is not None
+    assert graph.get_node("folder:app") is not None
+    assert graph.get_node("file:app/main.py") is not None
+    assert graph.get_node("file:README.md") is not None
+    assert {edge.target for edge in graph.outgoing(result.project_id, "contains")} == {
+        "folder:app",
+        "file:README.md",
+    }
+
+
+def test_project_indexer_ignores_service_directories(tmp_path: Path) -> None:
+    ignored = tmp_path / ".git"
+    ignored.mkdir()
+    (ignored / "config").write_text("secret", encoding="utf-8")
+    (tmp_path / "main.py").write_text("x = 1\n", encoding="utf-8")
+
+    graph, result = ProjectIndexer().build_graph(tmp_path)
+
+    assert result.files_indexed == 1
+    assert graph.get_node("file:main.py") is not None
+    assert all(".git" not in node.id for node in graph.nodes)
+
+
+def test_project_indexer_rejects_missing_root(tmp_path: Path) -> None:
+    missing = tmp_path / "missing"
+
+    try:
+        ProjectIndexer().build_graph(missing)
+    except FileNotFoundError as error:
+        assert error.args[0] == missing.resolve()
+    else:
+        raise AssertionError("FileNotFoundError expected")
