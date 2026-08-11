@@ -85,6 +85,11 @@ class PythonAnalyzer:
     def _import_names(node: ast.Import | ast.ImportFrom) -> list[str]:
         if isinstance(node, ast.Import):
             return [alias.name for alias in node.names]
-        module = node.module or ""
+
         prefix = "." * node.level
-        return [prefix + module] if module or node.level else []
+        if node.module:
+            return [prefix + node.module]
+
+        if node.level:
+            return [prefix + alias.name for alias in node.names]
+        return []
