@@ -30,6 +30,18 @@ def test_python_analyzer_extracts_symbols_and_imports(tmp_path: Path) -> None:
     assert analysis.imports == ("json", "pathlib")
 
 
+def test_python_analyzer_preserves_relative_import_target(tmp_path: Path) -> None:
+    package = tmp_path / "app" / "services"
+    package.mkdir(parents=True)
+    source = package / "worker.py"
+    source.write_text("from .. import models\nfrom .helpers import run\n", encoding="utf-8")
+
+    analysis = PythonAnalyzer().analyze(source, tmp_path)
+
+    assert analysis.module == "app.services.worker"
+    assert analysis.imports == ("..models", ".helpers")
+
+
 def test_python_analyzer_rejects_invalid_syntax(tmp_path: Path) -> None:
     source = tmp_path / "broken.py"
     source.write_text("def broken(:\n", encoding="utf-8")
