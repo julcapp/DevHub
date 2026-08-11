@@ -53,11 +53,51 @@ def test_project_indexer_adds_python_symbols_and_imports(tmp_path: Path) -> None
     assert result.python_files_analyzed == 1
     assert result.symbols_indexed == 2
     assert result.imports_indexed == 1
+    assert result.internal_dependencies_resolved == 0
     assert graph.get_node("module:app.service") is not None
     assert graph.get_node("symbol:app.service.Service") is not None
     assert graph.get_node("symbol:app.service.Service.run") is not None
     assert graph.get_node("module-ref:json") is not None
     assert graph.outgoing("module:app.service", "imports")[0].target == "module-ref:json"
+
+
+def test_project_indexer_resolves_absolute_internal_dependency(tmp_path: Path) -> None:
+    app_dir = tmp_path / "app"
+    app_dir.mkdir()
+    (app_dir / "models.py").write_text("class Model:\n    pass\n", encoding="utf-8")
+    (app_dir / "service.py").write_text(
+        "import app.models\n\n"
+        "def build():\n"
+        "    return app.models.Model()\n",
+        encoding="utf-8",
+    )
+
+    graph, result = ProjectIndexer().build_graph(tmp_path)
+
+    dependencies = graph.outgoing("module:app.service", "depends_on")
+    assert result.internal_dependencies_resolved == 1
+    assert len(dependencies) == 1
+    assert dependencies[0].target == "module:app.models"
+    assert dependencies[0].attributes["import"] == "app.models"
+
+
+def test_project_indexer_resolves_relative_internal_dependency(tmp_path: Path) -> None:
+    package = tmp_path / "app" / "services"
+    package.mkdir(parents=True)
+    (tmp_path / "app" / "models.py").write_text("class Model:\n    pass\n", encoding="utf-8")
+    (package / "worker.py").write_text(
+        "from .. import models\n\n"
+        "def run():\n"
+        "    return models.Model()\n",
+        encoding="utf-8",
+    )
+
+    graph, result = ProjectIndexer().build_graph(tmp_path)
+
+    dependencies = graph.outgoing("module:app.services.worker", "depends_on")
+    assert result.internal_dependencies_resolved == 1
+    assert len(dependencies) == 1
+    assert dependencies[0].target == "module:app"
 
 
 def test_project_indexer_rejects_missing_root(tmp_path: Path) -> None:
