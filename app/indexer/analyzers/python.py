@@ -88,13 +88,7 @@ class PythonAnalyzer:
 
         prefix = "." * node.level
         if node.module:
-            base = prefix + node.module
-            # Сохраняем как базовый модуль, так и импортированные подмодули.
-            # Это позволяет разрешать `from app import models` в `app.models`,
-            # если такой модуль существует внутри индексируемого проекта.
-            names = [base]
-            names.extend(f"{base}.{alias.name}" for alias in node.names if alias.name != "*")
-            return names
+            return [prefix + node.module]
 
         if node.level:
             return [prefix + alias.name for alias in node.names]
