@@ -36,6 +36,30 @@ def test_project_indexer_ignores_service_directories(tmp_path: Path) -> None:
     assert all(".git" not in node.id for node in graph.nodes)
 
 
+def test_project_indexer_adds_python_symbols_and_imports(tmp_path: Path) -> None:
+    app_dir = tmp_path / "app"
+    app_dir.mkdir()
+    source = app_dir / "service.py"
+    source.write_text(
+        "import json\n\n"
+        "class Service:\n"
+        "    def run(self):\n"
+        "        return json.dumps({})\n",
+        encoding="utf-8",
+    )
+
+    graph, result = ProjectIndexer().build_graph(tmp_path)
+
+    assert result.python_files_analyzed == 1
+    assert result.symbols_indexed == 2
+    assert result.imports_indexed == 1
+    assert graph.get_node("module:app.service") is not None
+    assert graph.get_node("symbol:app.service.Service") is not None
+    assert graph.get_node("symbol:app.service.Service.run") is not None
+    assert graph.get_node("module-ref:json") is not None
+    assert graph.outgoing("module:app.service", "imports")[0].target == "module-ref:json"
+
+
 def test_project_indexer_rejects_missing_root(tmp_path: Path) -> None:
     missing = tmp_path / "missing"
 
