@@ -8,9 +8,9 @@ from app.workspaces.architecture.graph_view import ArchitectureGraphView
 class ArchitectureWorkspace(QWidget):
     def __init__(self)->None:
         super().__init__(); self.controller=ArchitectureWorkspaceController(); self.root_path:Path|None=None; self.summary:ArchitectureSummary|None=None
-        self.project_label=QLabel("Проект не выбран"); self.status_label=QLabel("Выберите локальный проект и запустите анализ."); self.dependencies=QListWidget(); self.warnings=QListWidget(); self.top_risks=QListWidget(); self.modules=QListWidget(); self.module_details=QTextEdit(); self.module_details.setReadOnly(True); self.graph_view=ArchitectureGraphView(); self.metrics={}; self._build_ui()
+        self.project_label=QLabel("Проект не выбран"); self.status_label=QLabel("Выберите локальный проект и запустите анализ."); self.health_label=QLabel("Здоровье архитектуры: —"); self.dependencies=QListWidget(); self.warnings=QListWidget(); self.top_risks=QListWidget(); self.modules=QListWidget(); self.module_details=QTextEdit(); self.module_details.setReadOnly(True); self.graph_view=ArchitectureGraphView(); self.metrics={}; self._build_ui()
     def _build_ui(self)->None:
-        layout=QVBoxLayout(self); header=QHBoxLayout(); title=QLabel("Центр архитектуры"); choose=QPushButton("Выбрать проект"); choose.clicked.connect(self.choose_project); analyze=QPushButton("Анализировать"); analyze.clicked.connect(self.analyze); header.addWidget(title); header.addStretch(); header.addWidget(choose); header.addWidget(analyze); layout.addLayout(header); layout.addWidget(self.project_label); layout.addWidget(self.status_label)
+        layout=QVBoxLayout(self); header=QHBoxLayout(); title=QLabel("Центр архитектуры"); choose=QPushButton("Выбрать проект"); choose.clicked.connect(self.choose_project); analyze=QPushButton("Анализировать"); analyze.clicked.connect(self.analyze); header.addWidget(title); header.addStretch(); header.addWidget(choose); header.addWidget(analyze); layout.addLayout(header); layout.addWidget(self.project_label); layout.addWidget(self.status_label); layout.addWidget(self.health_label)
         grid=QGridLayout(); names=[("files","Файлы"),("folders","Папки"),("modules","Модули"),("classes","Классы"),("methods","Методы"),("functions","Функции"),("imports","Импорты"),("internal_dependencies","Внутренние зависимости"),("nodes_total","Узлы графа"),("edges_total","Связи графа")]
         for i,(key,text) in enumerate(names): value=QLabel("—"); self.metrics[key]=value; row,col=i//2,(i%2)*2; grid.addWidget(QLabel(text),row,col); grid.addWidget(value,row,col+1)
         layout.addLayout(grid); layout.addWidget(QLabel("Карта модулей")); layout.addWidget(self.graph_view,2)
@@ -27,7 +27,7 @@ class ArchitectureWorkspace(QWidget):
         except (FileNotFoundError,OSError,ValueError) as error:self.status_label.setText(f"Ошибка анализа: {error}"); return
         self._show_summary(self.summary)
     def _show_summary(self,s:ArchitectureSummary)->None:
-        self.project_label.setText(f"{s.project_name} — {s.project_path}")
+        self.project_label.setText(f"{s.project_name} — {s.project_path}"); self.health_label.setText(f"Здоровье архитектуры: {s.health_level} ({s.health_score}/100)")
         for key,label in self.metrics.items():label.setText(str(getattr(s,key)))
         self.dependencies.clear(); self.warnings.clear(); self.top_risks.clear(); self.modules.clear(); self.module_details.clear(); self.dependencies.addItems(s.dependencies or ("Внутренние зависимости не обнаружены",)); self.warnings.addItems(s.warnings or ("Критических предупреждений нет",)); self.modules.addItems([f"{x.name} [{x.risk_level}: {x.risk_score}]" for x in s.module_details]); self.top_risks.addItems([f"#{i+1} {x.name} — {x.risk_score}/100" for i,x in enumerate(s.top_risks)] or ["Риски не обнаружены"]); self.graph_view.show_summary(s)
         if s.module_details:self.modules.setCurrentRow(0)
