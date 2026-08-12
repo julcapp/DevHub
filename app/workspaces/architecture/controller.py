@@ -37,6 +37,7 @@ class ArchitectureSummary:
     module_details: tuple[ModuleArchitecture, ...] = ()
     cycles: tuple[tuple[str, ...], ...] = ()
     warnings: tuple[str, ...] = ()
+    top_risks: tuple[ModuleArchitecture, ...] = ()
 
 
 class ArchitectureWorkspaceController:
@@ -70,7 +71,8 @@ class ArchitectureWorkspaceController:
             level="Высокий" if score>=60 else ("Средний" if score>=30 else "Низкий")
             module_details.append(ModuleArchitecture(module.label,str(module.attributes.get("path","")),outgoing,incoming,tuple(sorted(symbols)),coupling,score,level))
         warnings=self._build_warnings(cycles,adjacency,module_details)
-        return ArchitectureSummary(root.resolve().name,str(root.resolve()),result.files_indexed,result.folders_indexed,counts.get("Module",0),counts.get("Class",0),counts.get("Method",0),counts.get("Function",0),result.imports_indexed,result.internal_dependencies_resolved,result.nodes_total,result.edges_total,tuple(sorted(dependencies)),tuple(module_details),cycles,warnings)
+        top_risks=tuple(sorted(module_details,key=lambda x:(-x.risk_score,-x.coupling,x.name))[:5])
+        return ArchitectureSummary(root.resolve().name,str(root.resolve()),result.files_indexed,result.folders_indexed,counts.get("Module",0),counts.get("Class",0),counts.get("Method",0),counts.get("Function",0),result.imports_indexed,result.internal_dependencies_resolved,result.nodes_total,result.edges_total,tuple(sorted(dependencies)),tuple(module_details),cycles,warnings,top_risks)
 
     @staticmethod
     def _find_cycles(adjacency: dict[str,set[str]]) -> tuple[tuple[str,...],...]:
