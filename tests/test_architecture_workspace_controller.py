@@ -58,3 +58,25 @@ def test_architecture_summary_warns_about_high_coupling(tmp_path: Path) -> None:
 
     assert summary.internal_dependencies == 5
     assert "Высокая связанность: app.a зависит от 5 внутренних модулей" in summary.warnings
+
+
+def test_architecture_summary_calculates_module_risk(tmp_path: Path) -> None:
+    package = tmp_path / "app"
+    package.mkdir()
+    for name in "bcdefg":
+        (package / f"{name}.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (package / "a.py").write_text(
+        "import app.b\nimport app.c\nimport app.d\nimport app.e\nimport app.f\nimport app.g\n"
+        "class Service:\n"
+        "    def run(self):\n"
+        "        return 1\n",
+        encoding="utf-8",
+    )
+
+    summary = ArchitectureWorkspaceController().analyze(tmp_path)
+    module = next(item for item in summary.module_details if item.name == "app.a")
+
+    assert module.coupling == 6
+    assert module.risk_score >= 60
+    assert module.risk_level == "Высокий"
+    assert any("Высокий архитектурный риск: app.a" in warning for warning in summary.warnings)
