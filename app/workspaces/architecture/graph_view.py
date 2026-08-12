@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 
 from PySide6.QtCore import QPointF, Qt, Signal
-from PySide6.QtGui import QBrush, QPen, QPolygonF
+from PySide6.QtGui import QBrush, QColor, QPen, QPolygonF
 from PySide6.QtWidgets import QGraphicsEllipseItem, QGraphicsLineItem, QGraphicsScene, QGraphicsSimpleTextItem, QGraphicsView
 
 from app.workspaces.architecture.controller import ArchitectureSummary
@@ -42,9 +42,9 @@ class ArchitectureGraphView(QGraphicsView):
                 if target_name in module_names: self._add_arrow(module.name, target_name, positions[module.name], positions[target_name])
         for module in modules:
             position = positions[module.name]; node = QGraphicsEllipseItem(-38,-38,76,76); node.setPos(position)
-            brush = Qt.GlobalColor.lightGray
-            if module.risk_level == "Высокий": brush = Qt.GlobalColor.lightCoral
-            elif module.risk_level == "Средний": brush = Qt.GlobalColor.lightYellow
+            brush = QColor("#d1d5db")
+            if module.risk_level == "Высокий": brush = QColor("#fecaca")
+            elif module.risk_level == "Средний": brush = QColor("#fef3c7")
             node.setBrush(QBrush(brush)); node.setPen(QPen(Qt.GlobalColor.darkRed if module.name in self._cycle_modules else Qt.GlobalColor.darkGray, 2.5 if module.name in self._cycle_modules else 1.5))
             node.setToolTip(f"{module.name}\nРиск: {module.risk_level} ({module.risk_score}/100)\nСвязанность: {module.coupling}")
             node.setData(0,module.name); node.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable,True); scene.addItem(node); self._nodes[module.name] = node
