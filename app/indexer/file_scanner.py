@@ -7,6 +7,7 @@ from pathlib import Path
 IGNORED_DIRECTORIES = {
     ".git",
     ".venv",
+    ".devhub",
     "__pycache__",
     "node_modules",
     "dist",
