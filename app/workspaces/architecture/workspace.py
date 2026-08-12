@@ -2,32 +2,46 @@ from __future__ import annotations
 from pathlib import Path
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFileDialog,QGridLayout,QHBoxLayout,QLabel,QListWidget,QPushButton,QSplitter,QTextEdit,QVBoxLayout,QWidget
+from app.workspaces.architecture.baseline import ArchitectureBaselineStore
 from app.workspaces.architecture.controller import ArchitectureSummary,ArchitectureWorkspaceController
 from app.workspaces.architecture.graph_view import ArchitectureGraphView
 from app.workspaces.architecture.history import ArchitectureHistoryStore
 
 class ArchitectureWorkspace(QWidget):
     def __init__(self)->None:
-        super().__init__(); self.controller=ArchitectureWorkspaceController(); self.history_store=ArchitectureHistoryStore(); self.root_path:Path|None=None; self.summary:ArchitectureSummary|None=None
-        self.project_label=QLabel("Проект не выбран"); self.status_label=QLabel("Выберите локальный проект и запустите анализ."); self.health_label=QLabel("Здоровье архитектуры: —"); self.trend_label=QLabel("Динамика: —"); self.history_list=QListWidget(); self.changes_list=QListWidget(); self.dependencies=QListWidget(); self.warnings=QListWidget(); self.top_risks=QListWidget(); self.modules=QListWidget(); self.module_details=QTextEdit(); self.module_details.setReadOnly(True); self.graph_view=ArchitectureGraphView(); self.metrics={}; self._build_ui()
+        super().__init__(); self.controller=ArchitectureWorkspaceController(); self.history_store=ArchitectureHistoryStore(); self.baseline_store=ArchitectureBaselineStore(); self.root_path:Path|None=None; self.summary:ArchitectureSummary|None=None
+        self.project_label=QLabel("Проект не выбран"); self.status_label=QLabel("Выберите локальный проект и запустите анализ."); self.health_label=QLabel("Здоровье архитектуры: —"); self.trend_label=QLabel("Динамика: —"); self.gate_label=QLabel("Quality Gate: —"); self.history_list=QListWidget(); self.changes_list=QListWidget(); self.baseline_list=QListWidget(); self.dependencies=QListWidget(); self.warnings=QListWidget(); self.top_risks=QListWidget(); self.modules=QListWidget(); self.module_details=QTextEdit(); self.module_details.setReadOnly(True); self.graph_view=ArchitectureGraphView(); self.metrics={}; self._build_ui()
     def _build_ui(self)->None:
-        layout=QVBoxLayout(self); header=QHBoxLayout(); title=QLabel("Центр архитектуры"); choose=QPushButton("Выбрать проект"); choose.clicked.connect(self.choose_project); analyze=QPushButton("Анализировать"); analyze.clicked.connect(self.analyze); header.addWidget(title); header.addStretch(); header.addWidget(choose); header.addWidget(analyze); layout.addLayout(header); layout.addWidget(self.project_label); layout.addWidget(self.status_label); layout.addWidget(self.health_label); layout.addWidget(self.trend_label)
+        layout=QVBoxLayout(self); header=QHBoxLayout(); title=QLabel("Центр архитектуры"); choose=QPushButton("Выбрать проект"); choose.clicked.connect(self.choose_project); analyze=QPushButton("Анализировать"); analyze.clicked.connect(self.analyze); baseline=QPushButton("Зафиксировать эталон"); baseline.clicked.connect(self.save_baseline); header.addWidget(title); header.addStretch(); header.addWidget(choose); header.addWidget(analyze); header.addWidget(baseline); layout.addLayout(header); layout.addWidget(self.project_label); layout.addWidget(self.status_label); layout.addWidget(self.health_label); layout.addWidget(self.trend_label); layout.addWidget(self.gate_label)
         grid=QGridLayout(); names=[("files","Файлы"),("folders","Папки"),("modules","Модули"),("classes","Классы"),("methods","Методы"),("functions","Функции"),("imports","Импорты"),("internal_dependencies","Внутренние зависимости"),("nodes_total","Узлы графа"),("edges_total","Связи графа")]
         for i,(key,text) in enumerate(names): value=QLabel("—"); self.metrics[key]=value; row,col=i//2,(i%2)*2; grid.addWidget(QLabel(text),row,col); grid.addWidget(value,row,col+1)
         layout.addLayout(grid); layout.addWidget(QLabel("Карта модулей")); layout.addWidget(self.graph_view,2)
         split=QSplitter(Qt.Orientation.Horizontal); left=QWidget(); ll=QVBoxLayout(left); ll.addWidget(QLabel("Модули проекта")); ll.addWidget(self.modules); right=QWidget(); rl=QVBoxLayout(right); rl.addWidget(QLabel("Карточка модуля")); rl.addWidget(self.module_details); split.addWidget(left); split.addWidget(right); layout.addWidget(split,2)
         layout.addWidget(QLabel("Top Risks — приоритет проверки")); layout.addWidget(self.top_risks,1)
-        history_split=QSplitter(Qt.Orientation.Horizontal); hb=QWidget(); hl=QVBoxLayout(hb); hl.addWidget(QLabel("История здоровья архитектуры")); hl.addWidget(self.history_list); cb=QWidget(); cl=QVBoxLayout(cb); cl.addWidget(QLabel("Изменения с прошлого анализа")); cl.addWidget(self.changes_list); history_split.addWidget(hb); history_split.addWidget(cb); layout.addWidget(history_split,1)
+        history_split=QSplitter(Qt.Orientation.Horizontal); hb=QWidget(); hl=QVBoxLayout(hb); hl.addWidget(QLabel("История здоровья архитектуры")); hl.addWidget(self.history_list); cb=QWidget(); cl=QVBoxLayout(cb); cl.addWidget(QLabel("Изменения с прошлого анализа")); cl.addWidget(self.changes_list); bb=QWidget(); bl=QVBoxLayout(bb); bl.addWidget(QLabel("Отклонения от эталона")); bl.addWidget(self.baseline_list); history_split.addWidget(hb); history_split.addWidget(cb); history_split.addWidget(bb); layout.addWidget(history_split,1)
         bottom=QSplitter(Qt.Orientation.Horizontal); bottom.addWidget(self.dependencies); bottom.addWidget(self.warnings); layout.addWidget(bottom,1)
         self.modules.currentRowChanged.connect(self._show_module); self.graph_view.module_selected.connect(self._select_module_by_name); self.top_risks.currentRowChanged.connect(self._select_risk_row)
     def choose_project(self)->None:
         directory=QFileDialog.getExistingDirectory(self,"Выберите папку проекта")
-        if directory:self.root_path=Path(directory); self.project_label.setText(str(self.root_path)); self._show_history()
+        if directory:self.root_path=Path(directory); self.project_label.setText(str(self.root_path)); self._show_history(); self._show_baseline()
     def analyze(self)->None:
         if self.root_path is None:self.status_label.setText("Сначала выберите проект."); return
         try:self.summary=self.controller.analyze(self.root_path); self.history_store.append(self.root_path,self.summary)
         except (FileNotFoundError,OSError,ValueError) as error:self.status_label.setText(f"Ошибка анализа: {error}"); return
-        self._show_summary(self.summary); self._show_history()
+        self._show_summary(self.summary); self._show_history(); self._show_baseline()
+    def save_baseline(self)->None:
+        if self.root_path is None or self.summary is None:self.status_label.setText("Сначала выполните анализ проекта."); return
+        self.baseline_store.save(self.root_path,self.summary); self.status_label.setText("Архитектурный эталон сохранён."); self._show_baseline()
+    def _show_baseline(self)->None:
+        self.baseline_list.clear()
+        if self.root_path is None:self.gate_label.setText("Quality Gate: —"); return
+        baseline=self.baseline_store.load(self.root_path)
+        if baseline is None:self.gate_label.setText("Quality Gate: нет эталона"); self.baseline_list.addItem("Эталон архитектуры не зафиксирован"); return
+        if self.summary is None:self.gate_label.setText("Quality Gate: ожидает анализа"); self.baseline_list.addItem(f"Эталон от {baseline.timestamp[:19]} | здоровье {baseline.health_score}/100"); return
+        changes=self.baseline_store.compare(baseline,self.summary)
+        failing=any(value.startswith(("Здоровье относительно эталона: -","Новый цикл относительно эталона:","Новый высокий риск относительно эталона:","Связанность выше эталона:")) for value in changes)
+        self.gate_label.setText(f"Quality Gate: {'FAIL' if failing else 'PASS'}")
+        self.baseline_list.addItems(changes)
     def _show_history(self)->None:
         self.history_list.clear(); self.changes_list.clear()
         if self.root_path is None:self.trend_label.setText("Динамика: —"); return
