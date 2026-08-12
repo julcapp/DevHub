@@ -22,10 +22,12 @@ class ArchitectureGraphView(QGraphicsView):
         self._nodes: dict[str, QGraphicsEllipseItem] = {}
         self._edges: list[tuple[str, str, QGraphicsLineItem]] = []
         self._cycle_modules: set[str] = set()
+        self._risk_levels: dict[str, str] = {}
 
     def show_summary(self, summary: ArchitectureSummary) -> None:
         scene = self.scene(); scene.clear(); self._nodes.clear(); self._edges.clear()
         self._cycle_modules = {name for cycle in summary.cycles for name in cycle}
+        self._risk_levels = {module.name: module.risk_level for module in summary.module_details}
         modules = list(summary.module_details)
         if not modules:
             scene.addText("Модули для отображения не обнаружены"); return
@@ -40,7 +42,11 @@ class ArchitectureGraphView(QGraphicsView):
                 if target_name in module_names: self._add_arrow(module.name, target_name, positions[module.name], positions[target_name])
         for module in modules:
             position = positions[module.name]; node = QGraphicsEllipseItem(-38,-38,76,76); node.setPos(position)
-            node.setBrush(QBrush(Qt.GlobalColor.lightGray)); node.setPen(QPen(Qt.GlobalColor.darkRed if module.name in self._cycle_modules else Qt.GlobalColor.darkGray, 2.5 if module.name in self._cycle_modules else 1.5))
+            brush = Qt.GlobalColor.lightGray
+            if module.risk_level == "Высокий": brush = Qt.GlobalColor.lightCoral
+            elif module.risk_level == "Средний": brush = Qt.GlobalColor.lightYellow
+            node.setBrush(QBrush(brush)); node.setPen(QPen(Qt.GlobalColor.darkRed if module.name in self._cycle_modules else Qt.GlobalColor.darkGray, 2.5 if module.name in self._cycle_modules else 1.5))
+            node.setToolTip(f"{module.name}\nРиск: {module.risk_level} ({module.risk_score}/100)\nСвязанность: {module.coupling}")
             node.setData(0,module.name); node.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable,True); scene.addItem(node); self._nodes[module.name] = node
             label = QGraphicsSimpleTextItem(module.name); label.setPos(position.x()-label.boundingRect().width()/2,position.y()+43); scene.addItem(label)
         scene.setSceneRect(scene.itemsBoundingRect().adjusted(-40,-40,40,40)); self.fitInView(scene.sceneRect(),Qt.AspectRatioMode.KeepAspectRatio)
