@@ -1,19 +1,20 @@
 from __future__ import annotations
 from pathlib import Path
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFileDialog,QGridLayout,QHBoxLayout,QLabel,QListWidget,QPushButton,QSplitter,QTextEdit,QVBoxLayout,QWidget
+from PySide6.QtWidgets import QDialog,QFileDialog,QGridLayout,QHBoxLayout,QLabel,QListWidget,QPushButton,QSplitter,QTextEdit,QVBoxLayout,QWidget
 from app.workspaces.architecture.baseline import ArchitectureBaselineStore
 from app.workspaces.architecture.controller import ArchitectureSummary,ArchitectureWorkspaceController
 from app.workspaces.architecture.graph_view import ArchitectureGraphView
 from app.workspaces.architecture.history import ArchitectureHistoryStore
 from app.workspaces.architecture.quality_gate import QualityGate
+from app.workspaces.architecture.quality_gate_dialog import QualityGateConfigDialog
 
 class ArchitectureWorkspace(QWidget):
     def __init__(self)->None:
         super().__init__(); self.controller=ArchitectureWorkspaceController(); self.history_store=ArchitectureHistoryStore(); self.baseline_store=ArchitectureBaselineStore(); self.quality_gate=QualityGate(); self.root_path:Path|None=None; self.summary:ArchitectureSummary|None=None
         self.project_label=QLabel("Проект не выбран"); self.status_label=QLabel("Выберите локальный проект и запустите анализ."); self.health_label=QLabel("Здоровье архитектуры: —"); self.trend_label=QLabel("Динамика: —"); self.gate_label=QLabel("Quality Gate: —"); self.gate_config_label=QLabel("Пороги Quality Gate: —"); self.history_list=QListWidget(); self.changes_list=QListWidget(); self.baseline_list=QListWidget(); self.dependencies=QListWidget(); self.warnings=QListWidget(); self.top_risks=QListWidget(); self.modules=QListWidget(); self.module_details=QTextEdit(); self.module_details.setReadOnly(True); self.graph_view=ArchitectureGraphView(); self.metrics={}; self._build_ui()
     def _build_ui(self)->None:
-        layout=QVBoxLayout(self); header=QHBoxLayout(); title=QLabel("Центр архитектуры"); choose=QPushButton("Выбрать проект"); choose.clicked.connect(self.choose_project); analyze=QPushButton("Анализировать"); analyze.clicked.connect(self.analyze); baseline=QPushButton("Зафиксировать эталон"); baseline.clicked.connect(self.save_baseline); header.addWidget(title); header.addStretch(); header.addWidget(choose); header.addWidget(analyze); header.addWidget(baseline); layout.addLayout(header); layout.addWidget(self.project_label); layout.addWidget(self.status_label); layout.addWidget(self.health_label); layout.addWidget(self.trend_label); layout.addWidget(self.gate_label); layout.addWidget(self.gate_config_label)
+        layout=QVBoxLayout(self); header=QHBoxLayout(); title=QLabel("Центр архитектуры"); choose=QPushButton("Выбрать проект"); choose.clicked.connect(self.choose_project); analyze=QPushButton("Анализировать"); analyze.clicked.connect(self.analyze); baseline=QPushButton("Зафиксировать эталон"); baseline.clicked.connect(self.save_baseline); gate_settings=QPushButton("Настроить Quality Gate"); gate_settings.clicked.connect(self.edit_quality_gate); header.addWidget(title); header.addStretch(); header.addWidget(choose); header.addWidget(analyze); header.addWidget(baseline); header.addWidget(gate_settings); layout.addLayout(header); layout.addWidget(self.project_label); layout.addWidget(self.status_label); layout.addWidget(self.health_label); layout.addWidget(self.trend_label); layout.addWidget(self.gate_label); layout.addWidget(self.gate_config_label)
         grid=QGridLayout(); names=[("files","Файлы"),("folders","Папки"),("modules","Модули"),("classes","Классы"),("methods","Методы"),("functions","Функции"),("imports","Импорты"),("internal_dependencies","Внутренние зависимости"),("nodes_total","Узлы графа"),("edges_total","Связи графа")]
         for i,(key,text) in enumerate(names): value=QLabel("—"); self.metrics[key]=value; row,col=i//2,(i%2)*2; grid.addWidget(QLabel(text),row,col); grid.addWidget(value,row,col+1)
         layout.addLayout(grid); layout.addWidget(QLabel("Карта модулей")); layout.addWidget(self.graph_view,2)
@@ -33,6 +34,11 @@ class ArchitectureWorkspace(QWidget):
     def save_baseline(self)->None:
         if self.root_path is None or self.summary is None:self.status_label.setText("Сначала выполните анализ проекта."); return
         self.baseline_store.save(self.root_path,self.summary); self.status_label.setText("Архитектурный эталон сохранён."); self._show_baseline()
+    def edit_quality_gate(self)->None:
+        if self.root_path is None:self.status_label.setText("Сначала выберите проект."); return
+        current=self.quality_gate.load_config(self.root_path); dialog=QualityGateConfigDialog(current,self)
+        if dialog.exec()!=QDialog.DialogCode.Accepted:return
+        self.quality_gate.save_config(self.root_path,dialog.config()); self.status_label.setText("Пороги Quality Gate сохранены."); self._show_baseline()
     def _show_baseline(self)->None:
         self.baseline_list.clear()
         if self.root_path is None:self.gate_label.setText("Quality Gate: —"); self.gate_config_label.setText("Пороги Quality Gate: —"); return
@@ -42,8 +48,7 @@ class ArchitectureWorkspace(QWidget):
         if self.summary is None:self.gate_label.setText("Quality Gate: ожидает анализа"); self.baseline_list.addItem(f"Эталон от {baseline.timestamp[:19]} | здоровье {baseline.health_score}/100"); return
         changes=self.baseline_store.compare(baseline,self.summary); result=self.quality_gate.evaluate(baseline,self.summary,config)
         self.gate_label.setText(f"Quality Gate: {'PASS' if result.passed else 'FAIL'}"); self.baseline_list.addItems(changes)
-        if result.violations:
-            self.baseline_list.addItem("— Нарушения Quality Gate —"); self.baseline_list.addItems(result.violations)
+        if result.violations:self.baseline_list.addItem("— Нарушения Quality Gate —"); self.baseline_list.addItems(result.violations)
     def _show_history(self)->None:
         self.history_list.clear(); self.changes_list.clear()
         if self.root_path is None:self.trend_label.setText("Динамика: —"); return
