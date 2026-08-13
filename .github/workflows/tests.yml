@@ -32,6 +32,10 @@ jobs:
   architecture-quality-gate:
     if: github.event_name == 'pull_request'
     runs-on: windows-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
 
     steps:
       - name: Checkout pull request
@@ -63,7 +67,25 @@ jobs:
           PYTHONIOENCODING: "utf-8"
         run: python -m app.workspaces.architecture.cli . --baseline-project ../baseline --bootstrap-if-missing-gate --json --markdown-output architecture-quality-gate.md
 
-      - name: Publish architecture report
+      - name: Publish architecture report to job summary
         if: always()
         shell: pwsh
-        run: Get-Content -Raw current/architecture-quality-gate.md >> $env:GITHUB_STEP_SUMMARY
+        run: |
+          if (Test-Path current/architecture-quality-gate.md) {
+            Get-Content -Raw current/architecture-quality-gate.md >> $env:GITHUB_STEP_SUMMARY
+          }
+
+      - name: Publish architecture report to pull request
+        if: always()
+        continue-on-error: true
+        working-directory: current
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+        run: |
+          if (Test-Path architecture-quality-gate.md) {
+            python -m app.workspaces.architecture.pr_comment architecture-quality-gate.md
+          }
