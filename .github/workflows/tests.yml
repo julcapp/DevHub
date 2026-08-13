@@ -65,7 +65,7 @@ jobs:
           QT_QPA_PLATFORM: offscreen
           PYTHONUTF8: "1"
           PYTHONIOENCODING: "utf-8"
-        run: python -m app.workspaces.architecture.cli . --baseline-project ../baseline --bootstrap-if-missing-gate --json --markdown-output architecture-quality-gate.md
+        run: python -m app.workspaces.architecture.cli . --baseline-project ../baseline --bootstrap-if-missing-gate --json --json-output architecture-quality-gate.json --markdown-output architecture-quality-gate.md
 
       - name: Publish architecture report to job summary
         if: always()
@@ -89,3 +89,14 @@ jobs:
           if (Test-Path architecture-quality-gate.md) {
             python -m app.workspaces.architecture.pr_comment architecture-quality-gate.md
           }
+
+      - name: Upload architecture quality gate artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: architecture-quality-gate
+          path: |
+            current/architecture-quality-gate.json
+            current/architecture-quality-gate.md
+          if-no-files-found: warn
+          retention-days: 30
