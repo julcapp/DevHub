@@ -6,7 +6,8 @@ from pathlib import Path
 
 from app.workspaces.architecture.baseline import ArchitectureBaseline, ArchitectureBaselineStore
 from app.workspaces.architecture.controller import ArchitectureSummary, ArchitectureWorkspaceController
-from app.workspaces.architecture.quality_gate import QualityGate
+from app.workspaces.architecture.quality_gate import QualityGate, QualityGateResult
+from app.workspaces.architecture.report import build_report
 
 
 def _baseline_from_summary(summary: ArchitectureSummary) -> ArchitectureBaseline:
@@ -27,10 +28,11 @@ def run_quality_gate(
     project: Path,
     baseline_project: Path | None = None,
     bootstrap_if_missing_gate: bool = False,
-) -> tuple[int, dict[str, object]]:
+) -> tuple[int, dict[str, object], str]:
     root = project.resolve()
     summary = ArchitectureWorkspaceController().analyze(root)
     gate = QualityGate()
+    baseline_summary: ArchitectureSummary | None = None
 
     if baseline_project is not None:
         baseline_root = baseline_project.resolve()
@@ -46,7 +48,8 @@ def run_quality_gate(
                 "baseline_source": str(baseline_root),
                 "message": "Базовая ветка ещё не содержит Architecture Quality Gate; текущий PR формирует исходный baseline.",
             }
-            return 0, payload
+            report = build_report(summary, None, QualityGateResult(True, ()))
+            return 0, payload, report.markdown
         baseline_summary = ArchitectureWorkspaceController().analyze(baseline_root)
         baseline = _baseline_from_summary(baseline_summary)
         baseline_source = str(baseline_root)
@@ -66,7 +69,8 @@ def run_quality_gate(
         "high_risk_modules": [item.name for item in summary.module_details if item.risk_level == "Высокий"],
         "baseline_source": baseline_source,
     }
-    return (0 if result.passed else 2), payload
+    report = build_report(summary, baseline_summary, result)
+    return (0 if result.passed else 2), payload, report.markdown
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -75,9 +79,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--baseline-project", help="Путь к checkout базовой ветки для сравнения в CI")
     parser.add_argument("--bootstrap-if-missing-gate", action="store_true", help="Не блокировать первый PR, который внедряет Architecture Quality Gate")
     parser.add_argument("--json", action="store_true", dest="as_json", help="Вывести результат в JSON")
+    parser.add_argument("--markdown-output", help="Сохранить Markdown-отчёт в файл")
     args = parser.parse_args(argv)
     baseline_project = Path(args.baseline_project) if args.baseline_project else None
-    code, payload = run_quality_gate(Path(args.project), baseline_project, args.bootstrap_if_missing_gate)
+    code, payload, markdown = run_quality_gate(Path(args.project), baseline_project, args.bootstrap_if_missing_gate)
+    if args.markdown_output:
+        output = Path(args.markdown_output)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(markdown, encoding="utf-8")
     if args.as_json:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
