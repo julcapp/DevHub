@@ -38,6 +38,7 @@ def run_quality_gate(
         baseline_root = baseline_project.resolve()
         if bootstrap_if_missing_gate and not _supports_architecture_gate(baseline_root):
             payload: dict[str, object] = {
+                "schema_version": 1,
                 "project": summary.project_name,
                 "health_score": summary.health_score,
                 "health_level": summary.health_level,
@@ -60,6 +61,7 @@ def run_quality_gate(
     config = gate.load_config(root)
     result = gate.evaluate(baseline, summary, config)
     payload = {
+        "schema_version": 1,
         "project": summary.project_name,
         "health_score": summary.health_score,
         "health_level": summary.health_level,
@@ -73,12 +75,18 @@ def run_quality_gate(
     return (0 if result.passed else 2), payload, report.markdown
 
 
+def _write_json(path: Path, payload: dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="DevHub Architecture Quality Gate")
     parser.add_argument("project", nargs="?", default=".", help="Путь к анализируемому проекту")
     parser.add_argument("--baseline-project", help="Путь к checkout базовой ветки для сравнения в CI")
     parser.add_argument("--bootstrap-if-missing-gate", action="store_true", help="Не блокировать первый PR, который внедряет Architecture Quality Gate")
     parser.add_argument("--json", action="store_true", dest="as_json", help="Вывести результат в JSON")
+    parser.add_argument("--json-output", help="Сохранить машинно-читаемый JSON-результат в файл")
     parser.add_argument("--markdown-output", help="Сохранить Markdown-отчёт в файл")
     args = parser.parse_args(argv)
     baseline_project = Path(args.baseline_project) if args.baseline_project else None
@@ -87,6 +95,8 @@ def main(argv: list[str] | None = None) -> int:
         output = Path(args.markdown_output)
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(markdown, encoding="utf-8")
+    if args.json_output:
+        _write_json(Path(args.json_output), payload)
     if args.as_json:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
