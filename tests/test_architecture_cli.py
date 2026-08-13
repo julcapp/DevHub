@@ -7,9 +7,10 @@ from app.workspaces.architecture.controller import ArchitectureWorkspaceControll
 
 def test_cli_quality_gate_passes_without_baseline(tmp_path: Path) -> None:
     (tmp_path / "app.py").write_text("def hello():\n    return 'ok'\n", encoding="utf-8")
-    code, payload = run_quality_gate(tmp_path)
+    code, payload, markdown = run_quality_gate(tmp_path)
     assert code == 0
     assert payload["quality_gate"] == "PASS"
+    assert "DevHub Architecture Quality Gate" in markdown
 
 
 def test_cli_quality_gate_fails_on_regression(tmp_path: Path) -> None:
@@ -18,10 +19,11 @@ def test_cli_quality_gate_fails_on_regression(tmp_path: Path) -> None:
     ArchitectureBaselineStore().save(tmp_path, summary)
     (tmp_path / "a.py").write_text("import b\ndef a():\n    return b.b()\n", encoding="utf-8")
     (tmp_path / "b.py").write_text("import a\ndef b():\n    return a.a()\n", encoding="utf-8")
-    code, payload = run_quality_gate(tmp_path)
+    code, payload, markdown = run_quality_gate(tmp_path)
     assert code == 2
     assert payload["quality_gate"] == "FAIL"
     assert payload["violations"]
+    assert "FAIL" in markdown
 
 
 def test_cli_quality_gate_compares_separate_base_checkout(tmp_path: Path) -> None:
@@ -32,8 +34,9 @@ def test_cli_quality_gate_compares_separate_base_checkout(tmp_path: Path) -> Non
     (current / "a.py").write_text("import b\ndef a():\n    return b.b()\n", encoding="utf-8")
     (current / "b.py").write_text("import a\ndef b():\n    return a.a()\n", encoding="utf-8")
 
-    code, payload = run_quality_gate(current, base)
+    code, payload, markdown = run_quality_gate(current, base)
 
     assert code == 2
     assert payload["quality_gate"] == "FAIL"
     assert payload["baseline_source"] == str(base.resolve())
+    assert "Architecture changes" in markdown
