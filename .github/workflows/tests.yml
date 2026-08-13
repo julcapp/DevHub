@@ -59,4 +59,6 @@ jobs:
         working-directory: current
         env:
           QT_QPA_PLATFORM: offscreen
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
         run: python -m app.workspaces.architecture.cli . --baseline-project ../baseline --json
