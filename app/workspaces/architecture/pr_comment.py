@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import argparse
 import json
+import os
 import urllib.request
 from pathlib import Path
 
@@ -51,3 +53,21 @@ def publish_pr_comment(repo: str, pr_number: int, token: str, report_path: Path)
         return "updated"
     _request(f"{api}/issues/{pr_number}/comments", token, "POST", {"body": body})
     return "created"
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Publish DevHub Architecture Quality Gate report to a pull request")
+    parser.add_argument("report", type=Path)
+    parser.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY"))
+    parser.add_argument("--pr", type=int, default=int(os.environ["GITHUB_PR_NUMBER"]) if os.environ.get("GITHUB_PR_NUMBER") else None)
+    parser.add_argument("--token", default=os.environ.get("GITHUB_TOKEN"))
+    args = parser.parse_args(argv)
+    if not args.repo or not args.pr or not args.token:
+        parser.error("repo, PR number and token are required")
+    action = publish_pr_comment(args.repo, args.pr, args.token, args.report)
+    print(f"Architecture PR comment {action}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
