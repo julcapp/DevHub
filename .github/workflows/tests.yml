@@ -28,3 +28,35 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m pytest -q
+
+  architecture-quality-gate:
+    if: github.event_name == 'pull_request'
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout pull request
+        uses: actions/checkout@v4
+        with:
+          path: current
+
+      - name: Checkout base revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: baseline
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: current/requirements.txt
+
+      - name: Install dependencies
+        run: python -m pip install -r current/requirements.txt
+
+      - name: Run architecture quality gate
+        working-directory: current
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m app.workspaces.architecture.cli . --baseline-project ../baseline --json
