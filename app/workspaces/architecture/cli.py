@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 from app.workspaces.architecture.baseline import ArchitectureBaseline, ArchitectureBaselineStore
@@ -24,6 +25,17 @@ def _supports_architecture_gate(project: Path) -> bool:
     return (project.resolve() / "app" / "workspaces" / "architecture" / "quality_gate.py").exists()
 
 
+def _ci_metadata() -> dict[str, object]:
+    return {
+        "run_id": os.getenv("GITHUB_RUN_ID", ""),
+        "run_number": os.getenv("GITHUB_RUN_NUMBER", ""),
+        "commit_sha": os.getenv("GITHUB_SHA", ""),
+        "ref_name": os.getenv("GITHUB_HEAD_REF") or os.getenv("GITHUB_REF_NAME", ""),
+        "pull_request": os.getenv("GITHUB_PR_NUMBER", ""),
+        "repository": os.getenv("GITHUB_REPOSITORY", ""),
+    }
+
+
 def run_quality_gate(
     project: Path,
     baseline_project: Path | None = None,
@@ -33,6 +45,7 @@ def run_quality_gate(
     summary = ArchitectureWorkspaceController().analyze(root)
     gate = QualityGate()
     baseline_summary: ArchitectureSummary | None = None
+    metadata = _ci_metadata()
 
     if baseline_project is not None:
         baseline_root = baseline_project.resolve()
@@ -48,6 +61,7 @@ def run_quality_gate(
                 "high_risk_modules": [item.name for item in summary.module_details if item.risk_level == "Высокий"],
                 "baseline_source": str(baseline_root),
                 "message": "Базовая ветка ещё не содержит Architecture Quality Gate; текущий PR формирует исходный baseline.",
+                **metadata,
             }
             report = build_report(summary, None, QualityGateResult(True, ()))
             return 0, payload, report.markdown
@@ -70,6 +84,7 @@ def run_quality_gate(
         "cycles": len(summary.cycles),
         "high_risk_modules": [item.name for item in summary.module_details if item.risk_level == "Высокий"],
         "baseline_source": baseline_source,
+        **metadata,
     }
     report = build_report(summary, baseline_summary, result)
     return (0 if result.passed else 2), payload, report.markdown
