@@ -2,6 +2,7 @@ from __future__ import annotations
 from pathlib import Path
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog,QFileDialog,QGridLayout,QHBoxLayout,QLabel,QListWidget,QPushButton,QSplitter,QTextEdit,QVBoxLayout,QWidget
+from app.workspaces.architecture.analytics import load_records,summarize
 from app.workspaces.architecture.baseline import ArchitectureBaselineStore
 from app.workspaces.architecture.controller import ArchitectureSummary,ArchitectureWorkspaceController
 from app.workspaces.architecture.graph_view import ArchitectureGraphView
@@ -11,21 +12,34 @@ from app.workspaces.architecture.quality_gate_dialog import QualityGateConfigDia
 
 class ArchitectureWorkspace(QWidget):
     def __init__(self)->None:
-        super().__init__(); self.controller=ArchitectureWorkspaceController(); self.history_store=ArchitectureHistoryStore(); self.baseline_store=ArchitectureBaselineStore(); self.quality_gate=QualityGate(); self.root_path:Path|None=None; self.summary:ArchitectureSummary|None=None
-        self.project_label=QLabel("Проект не выбран"); self.status_label=QLabel("Выберите локальный проект и запустите анализ."); self.health_label=QLabel("Здоровье архитектуры: —"); self.trend_label=QLabel("Динамика: —"); self.gate_label=QLabel("Quality Gate: —"); self.gate_config_label=QLabel("Пороги Quality Gate: —"); self.history_list=QListWidget(); self.changes_list=QListWidget(); self.baseline_list=QListWidget(); self.dependencies=QListWidget(); self.warnings=QListWidget(); self.top_risks=QListWidget(); self.modules=QListWidget(); self.module_details=QTextEdit(); self.module_details.setReadOnly(True); self.graph_view=ArchitectureGraphView(); self.metrics={}; self._build_ui()
+        super().__init__(); self.controller=ArchitectureWorkspaceController(); self.history_store=ArchitectureHistoryStore(); self.baseline_store=ArchitectureBaselineStore(); self.quality_gate=QualityGate(); self.root_path:Path|None=None; self.summary:ArchitectureSummary|None=None; self.ci_results_path:Path|None=None
+        self.project_label=QLabel("Проект не выбран"); self.status_label=QLabel("Выберите локальный проект и запустите анализ."); self.health_label=QLabel("Здоровье архитектуры: —"); self.trend_label=QLabel("Динамика: —"); self.ci_trend_label=QLabel("CI Architecture Trend: —"); self.gate_label=QLabel("Quality Gate: —"); self.gate_config_label=QLabel("Пороги Quality Gate: —"); self.ci_trend_list=QListWidget(); self.history_list=QListWidget(); self.changes_list=QListWidget(); self.baseline_list=QListWidget(); self.dependencies=QListWidget(); self.warnings=QListWidget(); self.top_risks=QListWidget(); self.modules=QListWidget(); self.module_details=QTextEdit(); self.module_details.setReadOnly(True); self.graph_view=ArchitectureGraphView(); self.metrics={}; self._build_ui()
     def _build_ui(self)->None:
-        layout=QVBoxLayout(self); header=QHBoxLayout(); title=QLabel("Центр архитектуры"); choose=QPushButton("Выбрать проект"); choose.clicked.connect(self.choose_project); analyze=QPushButton("Анализировать"); analyze.clicked.connect(self.analyze); baseline=QPushButton("Зафиксировать эталон"); baseline.clicked.connect(self.save_baseline); gate_settings=QPushButton("Настроить Quality Gate"); gate_settings.clicked.connect(self.edit_quality_gate); header.addWidget(title); header.addStretch(); header.addWidget(choose); header.addWidget(analyze); header.addWidget(baseline); header.addWidget(gate_settings); layout.addLayout(header); layout.addWidget(self.project_label); layout.addWidget(self.status_label); layout.addWidget(self.health_label); layout.addWidget(self.trend_label); layout.addWidget(self.gate_label); layout.addWidget(self.gate_config_label)
+        layout=QVBoxLayout(self); header=QHBoxLayout(); title=QLabel("Центр архитектуры"); choose=QPushButton("Выбрать проект"); choose.clicked.connect(self.choose_project); analyze=QPushButton("Анализировать"); analyze.clicked.connect(self.analyze); baseline=QPushButton("Зафиксировать эталон"); baseline.clicked.connect(self.save_baseline); gate_settings=QPushButton("Настроить Quality Gate"); gate_settings.clicked.connect(self.edit_quality_gate); ci_results=QPushButton("Загрузить историю CI"); ci_results.clicked.connect(self.choose_ci_results); header.addWidget(title); header.addStretch(); header.addWidget(choose); header.addWidget(analyze); header.addWidget(baseline); header.addWidget(gate_settings); header.addWidget(ci_results); layout.addLayout(header); layout.addWidget(self.project_label); layout.addWidget(self.status_label); layout.addWidget(self.health_label); layout.addWidget(self.trend_label); layout.addWidget(self.ci_trend_label); layout.addWidget(self.gate_label); layout.addWidget(self.gate_config_label)
         grid=QGridLayout(); names=[("files","Файлы"),("folders","Папки"),("modules","Модули"),("classes","Классы"),("methods","Методы"),("functions","Функции"),("imports","Импорты"),("internal_dependencies","Внутренние зависимости"),("nodes_total","Узлы графа"),("edges_total","Связи графа")]
         for i,(key,text) in enumerate(names): value=QLabel("—"); self.metrics[key]=value; row,col=i//2,(i%2)*2; grid.addWidget(QLabel(text),row,col); grid.addWidget(value,row,col+1)
         layout.addLayout(grid); layout.addWidget(QLabel("Карта модулей")); layout.addWidget(self.graph_view,2)
         split=QSplitter(Qt.Orientation.Horizontal); left=QWidget(); ll=QVBoxLayout(left); ll.addWidget(QLabel("Модули проекта")); ll.addWidget(self.modules); right=QWidget(); rl=QVBoxLayout(right); rl.addWidget(QLabel("Карточка модуля")); rl.addWidget(self.module_details); split.addWidget(left); split.addWidget(right); layout.addWidget(split,2)
         layout.addWidget(QLabel("Top Risks — приоритет проверки")); layout.addWidget(self.top_risks,1)
         history_split=QSplitter(Qt.Orientation.Horizontal); hb=QWidget(); hl=QVBoxLayout(hb); hl.addWidget(QLabel("История здоровья архитектуры")); hl.addWidget(self.history_list); cb=QWidget(); cl=QVBoxLayout(cb); cl.addWidget(QLabel("Изменения с прошлого анализа")); cl.addWidget(self.changes_list); bb=QWidget(); bl=QVBoxLayout(bb); bl.addWidget(QLabel("Отклонения от эталона / Quality Gate")); bl.addWidget(self.baseline_list); history_split.addWidget(hb); history_split.addWidget(cb); history_split.addWidget(bb); layout.addWidget(history_split,1)
+        layout.addWidget(QLabel("История CI Architecture Quality Gate")); layout.addWidget(self.ci_trend_list,1)
         bottom=QSplitter(Qt.Orientation.Horizontal); bottom.addWidget(self.dependencies); bottom.addWidget(self.warnings); layout.addWidget(bottom,1)
         self.modules.currentRowChanged.connect(self._show_module); self.graph_view.module_selected.connect(self._select_module_by_name); self.top_risks.currentRowChanged.connect(self._select_risk_row)
     def choose_project(self)->None:
         directory=QFileDialog.getExistingDirectory(self,"Выберите папку проекта")
         if directory:self.root_path=Path(directory); self.project_label.setText(str(self.root_path)); self._show_history(); self._show_baseline()
+    def choose_ci_results(self)->None:
+        directory=QFileDialog.getExistingDirectory(self,"Выберите папку с результатами Architecture Quality Gate")
+        if directory:self.ci_results_path=Path(directory); self._show_ci_trend()
+    def _show_ci_trend(self)->None:
+        self.ci_trend_list.clear()
+        if self.ci_results_path is None:self.ci_trend_label.setText("CI Architecture Trend: —"); return
+        records=load_records(self.ci_results_path); trend=summarize(records)
+        if trend.runs==0:self.ci_trend_label.setText("CI Architecture Trend: данных нет"); self.ci_trend_list.addItem("JSON-результаты Quality Gate не найдены"); return
+        delta=trend.health_delta or 0; self.ci_trend_label.setText(f"CI Architecture Trend: {trend.first_health_score}/100 → {trend.latest_health_score}/100 ({delta:+d}) | PASS {trend.pass_count} | FAIL {trend.fail_count} | BOOTSTRAP {trend.bootstrap_count}")
+        for item in reversed(records):
+            run=f"run {item.run_id}" if item.run_id else "run —"; pr=f"PR #{item.pull_request}" if item.pull_request else "без PR"; sha=item.commit_sha[:8] if item.commit_sha else "—"; self.ci_trend_list.addItem(f"{item.quality_gate} | {item.health_score}/100 {item.health_level} | {run} | {pr} | {sha}")
+        if trend.latest_high_risk_modules:self.ci_trend_list.addItem("— High-risk модули последнего запуска —"); self.ci_trend_list.addItems(trend.latest_high_risk_modules)
     def analyze(self)->None:
         if self.root_path is None:self.status_label.setText("Сначала выберите проект."); return
         try:self.summary=self.controller.analyze(self.root_path); self.history_store.append(self.root_path,self.summary)
