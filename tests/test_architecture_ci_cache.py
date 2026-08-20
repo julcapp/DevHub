@@ -24,3 +24,14 @@ def test_ci_cache_ignores_metadata_file(tmp_path: Path) -> None:
     manager = CICacheManager(max_records=3)
     manager.maintain(tmp_path)
     assert manager.maintain(tmp_path).records == 0
+
+
+def test_ci_cache_clear_removes_results_and_metadata(tmp_path: Path) -> None:
+    manager = CICacheManager(max_records=3)
+    for run_id in (100, 101):
+        (tmp_path / f"{run_id}.json").write_text(json.dumps({"run_id": str(run_id)}), encoding="utf-8")
+    manager.maintain(tmp_path)
+    assert manager.load_status(tmp_path) is not None
+    assert manager.clear(tmp_path) == 2
+    assert manager.load_status(tmp_path) is None
+    assert list(tmp_path.glob("*.json")) == []
