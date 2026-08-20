@@ -4,6 +4,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog,QFileDialog,QGridLayout,QHBoxLayout,QLabel,QListWidget,QPushButton,QSplitter,QTextEdit,QVBoxLayout,QWidget
 from app.workspaces.architecture.analytics import load_records,summarize
 from app.workspaces.architecture.baseline import ArchitectureBaselineStore
+from app.workspaces.architecture.ci_cache import CICacheManager
 from app.workspaces.architecture.controller import ArchitectureSummary,ArchitectureWorkspaceController
 from app.workspaces.architecture.github_ci import GitHubCIArtifactClient,repository_from_git_config
 from app.workspaces.architecture.github_ci_worker import GitHubCIHistoryWorker
@@ -14,10 +15,10 @@ from app.workspaces.architecture.quality_gate_dialog import QualityGateConfigDia
 
 class ArchitectureWorkspace(QWidget):
     def __init__(self)->None:
-        super().__init__(); self.controller=ArchitectureWorkspaceController(); self.history_store=ArchitectureHistoryStore(); self.baseline_store=ArchitectureBaselineStore(); self.quality_gate=QualityGate(); self.github_ci=GitHubCIArtifactClient(); self.root_path:Path|None=None; self.summary:ArchitectureSummary|None=None; self.ci_results_path:Path|None=None; self.ci_worker:GitHubCIHistoryWorker|None=None
-        self.project_label=QLabel("Проект не выбран"); self.status_label=QLabel("Выберите локальный проект и запустите анализ."); self.health_label=QLabel("Здоровье архитектуры: —"); self.trend_label=QLabel("Динамика: —"); self.ci_trend_label=QLabel("CI Architecture Trend: —"); self.gate_label=QLabel("Quality Gate: —"); self.gate_config_label=QLabel("Пороги Quality Gate: —"); self.ci_trend_list=QListWidget(); self.history_list=QListWidget(); self.changes_list=QListWidget(); self.baseline_list=QListWidget(); self.dependencies=QListWidget(); self.warnings=QListWidget(); self.top_risks=QListWidget(); self.modules=QListWidget(); self.module_details=QTextEdit(); self.module_details.setReadOnly(True); self.graph_view=ArchitectureGraphView(); self.metrics={}; self.ci_refresh_button=QPushButton("Обновить из GitHub"); self._build_ui()
+        super().__init__(); self.controller=ArchitectureWorkspaceController(); self.history_store=ArchitectureHistoryStore(); self.baseline_store=ArchitectureBaselineStore(); self.quality_gate=QualityGate(); self.github_ci=GitHubCIArtifactClient(); self.ci_cache=CICacheManager(); self.root_path:Path|None=None; self.summary:ArchitectureSummary|None=None; self.ci_results_path:Path|None=None; self.ci_worker:GitHubCIHistoryWorker|None=None
+        self.project_label=QLabel("Проект не выбран"); self.status_label=QLabel("Выберите локальный проект и запустите анализ."); self.health_label=QLabel("Здоровье архитектуры: —"); self.trend_label=QLabel("Динамика: —"); self.ci_trend_label=QLabel("CI Architecture Trend: —"); self.ci_cache_label=QLabel("Кэш CI: —"); self.gate_label=QLabel("Quality Gate: —"); self.gate_config_label=QLabel("Пороги Quality Gate: —"); self.ci_trend_list=QListWidget(); self.history_list=QListWidget(); self.changes_list=QListWidget(); self.baseline_list=QListWidget(); self.dependencies=QListWidget(); self.warnings=QListWidget(); self.top_risks=QListWidget(); self.modules=QListWidget(); self.module_details=QTextEdit(); self.module_details.setReadOnly(True); self.graph_view=ArchitectureGraphView(); self.metrics={}; self.ci_refresh_button=QPushButton("Обновить из GitHub"); self.ci_clear_button=QPushButton("Очистить кэш CI"); self._build_ui()
     def _build_ui(self)->None:
-        layout=QVBoxLayout(self); header=QHBoxLayout(); title=QLabel("Центр архитектуры"); choose=QPushButton("Выбрать проект"); choose.clicked.connect(self.choose_project); analyze=QPushButton("Анализировать"); analyze.clicked.connect(self.analyze); baseline=QPushButton("Зафиксировать эталон"); baseline.clicked.connect(self.save_baseline); gate_settings=QPushButton("Настроить Quality Gate"); gate_settings.clicked.connect(self.edit_quality_gate); self.ci_refresh_button.clicked.connect(self.refresh_ci_from_github); ci_results=QPushButton("Загрузить историю CI"); ci_results.clicked.connect(self.choose_ci_results); header.addWidget(title); header.addStretch(); header.addWidget(choose); header.addWidget(analyze); header.addWidget(baseline); header.addWidget(gate_settings); header.addWidget(self.ci_refresh_button); header.addWidget(ci_results); layout.addLayout(header); layout.addWidget(self.project_label); layout.addWidget(self.status_label); layout.addWidget(self.health_label); layout.addWidget(self.trend_label); layout.addWidget(self.ci_trend_label); layout.addWidget(self.gate_label); layout.addWidget(self.gate_config_label)
+        layout=QVBoxLayout(self); header=QHBoxLayout(); title=QLabel("Центр архитектуры"); choose=QPushButton("Выбрать проект"); choose.clicked.connect(self.choose_project); analyze=QPushButton("Анализировать"); analyze.clicked.connect(self.analyze); baseline=QPushButton("Зафиксировать эталон"); baseline.clicked.connect(self.save_baseline); gate_settings=QPushButton("Настроить Quality Gate"); gate_settings.clicked.connect(self.edit_quality_gate); self.ci_refresh_button.clicked.connect(self.refresh_ci_from_github); self.ci_clear_button.clicked.connect(self.clear_ci_cache); ci_results=QPushButton("Загрузить историю CI"); ci_results.clicked.connect(self.choose_ci_results); header.addWidget(title); header.addStretch(); header.addWidget(choose); header.addWidget(analyze); header.addWidget(baseline); header.addWidget(gate_settings); header.addWidget(self.ci_refresh_button); header.addWidget(self.ci_clear_button); header.addWidget(ci_results); layout.addLayout(header); layout.addWidget(self.project_label); layout.addWidget(self.status_label); layout.addWidget(self.health_label); layout.addWidget(self.trend_label); layout.addWidget(self.ci_trend_label); layout.addWidget(self.ci_cache_label); layout.addWidget(self.gate_label); layout.addWidget(self.gate_config_label)
         grid=QGridLayout(); names=[("files","Файлы"),("folders","Папки"),("modules","Модули"),("classes","Классы"),("methods","Методы"),("functions","Функции"),("imports","Импорты"),("internal_dependencies","Внутренние зависимости"),("nodes_total","Узлы графа"),("edges_total","Связи графа")]
         for i,(key,text) in enumerate(names): value=QLabel("—"); self.metrics[key]=value; row,col=i//2,(i%2)*2; grid.addWidget(QLabel(text),row,col); grid.addWidget(value,row,col+1)
         layout.addLayout(grid); layout.addWidget(QLabel("Карта модулей")); layout.addWidget(self.graph_view,2)
@@ -34,7 +35,7 @@ class ArchitectureWorkspace(QWidget):
         self.root_path=root.resolve(); self.project_label.setText(str(self.root_path)); self.summary=None; self._show_history(); self._show_baseline()
         cache=self.root_path/".devhub"/"ci-quality-gate"; self.ci_results_path=cache
         if cache.exists():self._show_ci_trend()
-        else:self.ci_trend_list.clear(); self.ci_trend_label.setText("CI Architecture Trend: кэш отсутствует")
+        else:self.ci_trend_list.clear(); self.ci_trend_label.setText("CI Architecture Trend: кэш отсутствует"); self._show_ci_cache_status()
         repository=repository_from_git_config(self.root_path)
         if repository:self.status_label.setText(f"Проект открыт. GitHub origin: {repository}.")
         else:self.status_label.setText("Проект открыт. GitHub origin не обнаружен.")
@@ -44,17 +45,28 @@ class ArchitectureWorkspace(QWidget):
         if self.ci_worker is not None and self.ci_worker.isRunning():self.status_label.setText("История CI уже загружается."); return
         repository=repository_from_git_config(self.root_path)
         if not repository:self.status_label.setText("Не удалось определить GitHub origin проекта."); return
-        destination=self.root_path/".devhub"/"ci-quality-gate"; self.status_label.setText(f"Загрузка истории CI из GitHub: {repository}..."); self.ci_refresh_button.setEnabled(False)
+        destination=self.root_path/".devhub"/"ci-quality-gate"; self.status_label.setText(f"Загрузка истории CI из GitHub: {repository}..."); self.ci_refresh_button.setEnabled(False); self.ci_clear_button.setEnabled(False)
         worker=GitHubCIHistoryWorker(self.github_ci,repository,destination); self.ci_worker=worker; worker.completed.connect(self._ci_refresh_completed); worker.failed.connect(self._ci_refresh_failed); worker.finished.connect(worker.deleteLater); worker.start()
     def _ci_refresh_completed(self,count:int,destination:str)->None:
-        self.ci_results_path=Path(destination); self._show_ci_trend(); self.status_label.setText(f"История CI обновлена из GitHub: загружено {count} результатов."); self.ci_refresh_button.setEnabled(True); self.ci_worker=None
+        self.ci_results_path=Path(destination); self._show_ci_trend(); self.status_label.setText(f"История CI обновлена из GitHub: загружено {count} результатов."); self.ci_refresh_button.setEnabled(True); self.ci_clear_button.setEnabled(True); self.ci_worker=None
     def _ci_refresh_failed(self,message:str)->None:
-        self.status_label.setText(f"Ошибка загрузки CI: {message}"); self.ci_refresh_button.setEnabled(True); self.ci_worker=None
+        self.status_label.setText(f"Ошибка загрузки CI: {message}"); self.ci_refresh_button.setEnabled(True); self.ci_clear_button.setEnabled(True); self.ci_worker=None
+    def clear_ci_cache(self)->None:
+        if self.root_path is None:self.status_label.setText("Сначала выберите проект."); return
+        if self.ci_worker is not None and self.ci_worker.isRunning():self.status_label.setText("Нельзя очищать кэш во время загрузки CI."); return
+        cache=self.root_path/".devhub"/"ci-quality-gate"; removed=self.ci_cache.clear(cache); self.ci_results_path=cache; self._show_ci_trend(); self._show_ci_cache_status(); self.status_label.setText(f"Кэш CI очищен: удалено {removed} результатов.")
     def choose_ci_results(self)->None:
         directory=QFileDialog.getExistingDirectory(self,"Выберите папку с результатами Architecture Quality Gate")
         if directory:self.ci_results_path=Path(directory); self._show_ci_trend()
+    def _show_ci_cache_status(self)->None:
+        if self.ci_results_path is None:self.ci_cache_label.setText("Кэш CI: —"); return
+        status=self.ci_cache.load_status(self.ci_results_path)
+        if status is None:
+            records=len([path for path in self.ci_results_path.glob("*.json") if path.name!=self.ci_cache.META_FILE]) if self.ci_results_path.exists() else 0
+            self.ci_cache_label.setText(f"Кэш CI: {records} запусков | метаданные отсутствуют"); return
+        updated=status.last_updated[:19].replace("T"," "); self.ci_cache_label.setText(f"Кэш CI: обновлено {updated} UTC | сохранено {status.records} запусков | лимит {status.max_records} | удалено при обновлении {status.removed}")
     def _show_ci_trend(self)->None:
-        self.ci_trend_list.clear()
+        self.ci_trend_list.clear(); self._show_ci_cache_status()
         if self.ci_results_path is None:self.ci_trend_label.setText("CI Architecture Trend: —"); return
         records=load_records(self.ci_results_path); trend=summarize(records)
         if trend.runs==0:self.ci_trend_label.setText("CI Architecture Trend: данных нет"); self.ci_trend_list.addItem("JSON-результаты Quality Gate не найдены"); return
