@@ -64,3 +64,21 @@ class CICacheManager:
             )
         except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
             return None
+
+    def clear(self, root: Path) -> int:
+        if not root.exists():
+            return 0
+        removed = 0
+        for path in self._result_files(root):
+            try:
+                path.unlink()
+                removed += 1
+            except OSError:
+                continue
+        meta = root / self.META_FILE
+        try:
+            if meta.exists():
+                meta.unlink()
+        except OSError:
+            pass
+        return removed
