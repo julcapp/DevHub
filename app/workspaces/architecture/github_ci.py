@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import configparser
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 import zipfile
@@ -11,6 +13,27 @@ from pathlib import Path
 
 class GitHubCIError(RuntimeError):
     pass
+
+
+def repository_from_git_config(root: Path) -> str | None:
+    config_path = root.resolve() / ".git" / "config"
+    if not config_path.exists():
+        return None
+    parser = configparser.ConfigParser()
+    parser.read(config_path, encoding="utf-8")
+    section = 'remote "origin"'
+    if not parser.has_section(section):
+        return None
+    url = parser.get(section, "url", fallback="").strip()
+    patterns = (
+        r"github\.com[:/](?P<repo>[^/\s]+/[^/\s]+?)(?:\.git)?$",
+        r"https?://github\.com/(?P<repo>[^/\s]+/[^/\s]+?)(?:\.git)?$",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group("repo")
+    return None
 
 
 class GitHubCIArtifactClient:
@@ -46,6 +69,8 @@ class GitHubCIArtifactClient:
                 if not candidates:
                     continue
                 payload = json.loads(bundle.read(candidates[0]).decode("utf-8"))
+            payload.setdefault("run_id", str(run_id))
+            payload.setdefault("commit_sha", str(run.get("head_sha", "")))
             output = destination / f"{run_id}.json"
             output.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
             saved += 1
