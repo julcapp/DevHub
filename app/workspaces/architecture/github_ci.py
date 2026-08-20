@@ -10,6 +10,8 @@ import zipfile
 from io import BytesIO
 from pathlib import Path
 
+from app.workspaces.architecture.ci_cache import CICacheManager
+
 
 class GitHubCIError(RuntimeError):
     pass
@@ -39,8 +41,9 @@ def repository_from_git_config(root: Path) -> str | None:
 class GitHubCIArtifactClient:
     API = "https://api.github.com"
 
-    def __init__(self, token: str | None = None) -> None:
+    def __init__(self, token: str | None = None, cache_manager: CICacheManager | None = None) -> None:
         self.token = token or os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN")
+        self.cache_manager = cache_manager or CICacheManager()
 
     def _request(self, url: str) -> bytes:
         headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "DevHub"}
@@ -72,6 +75,10 @@ class GitHubCIArtifactClient:
             payload.setdefault("run_id", str(run_id))
             payload.setdefault("commit_sha", str(run.get("head_sha", "")))
             output = destination / f"{run_id}.json"
-            output.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-            saved += 1
+            previous = output.read_text(encoding="utf-8") if output.exists() else None
+            rendered = json.dumps(payload, ensure_ascii=False, indent=2)
+            if previous != rendered:
+                output.write_text(rendered, encoding="utf-8")
+                saved += 1
+        self.cache_manager.maintain(destination)
         return saved
