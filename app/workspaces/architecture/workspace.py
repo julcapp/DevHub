@@ -29,7 +29,16 @@ class ArchitectureWorkspace(QWidget):
         self.modules.currentRowChanged.connect(self._show_module); self.graph_view.module_selected.connect(self._select_module_by_name); self.top_risks.currentRowChanged.connect(self._select_risk_row)
     def choose_project(self)->None:
         directory=QFileDialog.getExistingDirectory(self,"Выберите папку проекта")
-        if directory:self.root_path=Path(directory); self.project_label.setText(str(self.root_path)); self._show_history(); self._show_baseline()
+        if directory:self.activate_project(Path(directory),refresh_ci=True)
+    def activate_project(self,root:Path,refresh_ci:bool=True)->None:
+        self.root_path=root.resolve(); self.project_label.setText(str(self.root_path)); self.summary=None; self._show_history(); self._show_baseline()
+        cache=self.root_path/".devhub"/"ci-quality-gate"; self.ci_results_path=cache
+        if cache.exists():self._show_ci_trend()
+        else:self.ci_trend_list.clear(); self.ci_trend_label.setText("CI Architecture Trend: кэш отсутствует")
+        repository=repository_from_git_config(self.root_path)
+        if repository:self.status_label.setText(f"Проект открыт. GitHub origin: {repository}.")
+        else:self.status_label.setText("Проект открыт. GitHub origin не обнаружен.")
+        if refresh_ci and repository:self.refresh_ci_from_github()
     def refresh_ci_from_github(self)->None:
         if self.root_path is None:self.status_label.setText("Сначала выберите проект."); return
         if self.ci_worker is not None and self.ci_worker.isRunning():self.status_label.setText("История CI уже загружается."); return
