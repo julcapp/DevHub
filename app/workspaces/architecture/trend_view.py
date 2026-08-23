@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QPainter, QPen, QPolygonF
+from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+from PySide6.QtGui import QMouseEvent, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import QWidget
 
 from app.workspaces.architecture.analytics import ArchitectureRunRecord
@@ -10,19 +10,30 @@ from app.workspaces.architecture.analytics import ArchitectureRunRecord
 class ArchitectureTrendView(QWidget):
     """Компактный график динамики здоровья и high-risk модулей по CI-запускам."""
 
+    record_selected = Signal(object)
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._records: tuple[ArchitectureRunRecord, ...] = ()
+        self._selected_index: int | None = None
         self.setMinimumHeight(150)
-        self.setToolTip("Сплошная линия — здоровье архитектуры; пунктир — количество high-risk модулей")
+        self.setToolTip("Сплошная линия — здоровье архитектуры; пунктир — количество high-risk модулей. Нажмите на точку запуска для деталей.")
 
     @property
     def records(self) -> tuple[ArchitectureRunRecord, ...]:
         return self._records
 
+    @property
+    def selected_index(self) -> int | None:
+        return self._selected_index
+
     def set_records(self, records: tuple[ArchitectureRunRecord, ...]) -> None:
         self._records = records
+        self._selected_index = None
         self.update()
+
+    def _chart_rect(self) -> QRectF:
+        return QRectF(self.rect()).adjusted(42, 12, -12, -28)
 
     def _points(self, values: list[int], area: QRectF, minimum: int, maximum: int) -> QPolygonF:
         if not values:
@@ -37,6 +48,27 @@ class ArchitectureTrendView(QWidget):
             points.append(QPointF(x, y))
         return QPolygonF(points)
 
+    def _nearest_index(self, x: float, area: QRectF) -> int | None:
+        if not self._records or not area.contains(QPointF(x, area.center().y())):
+            return None
+        if len(self._records) == 1:
+            return 0
+        step = area.width() / (len(self._records) - 1)
+        index = round((x - area.left()) / step)
+        return max(0, min(len(self._records) - 1, index))
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:  # type: ignore[override]
+        if event.button() != Qt.MouseButton.LeftButton:
+            super().mousePressEvent(event)
+            return
+        index = self._nearest_index(event.position().x(), self._chart_rect())
+        if index is None:
+            super().mousePressEvent(event)
+            return
+        self._selected_index = index
+        self.update()
+        self.record_selected.emit(self._records[index])
+
     def paintEvent(self, event) -> None:  # type: ignore[override]
         super().paintEvent(event)
         painter = QPainter(self)
@@ -46,7 +78,7 @@ class ArchitectureTrendView(QWidget):
         accent = palette.color(palette.ColorRole.Highlight)
         secondary = palette.color(palette.ColorRole.Mid)
 
-        rect = QRectF(self.rect()).adjusted(42, 12, -12, -28)
+        rect = self._chart_rect()
         painter.setPen(QPen(secondary, 1))
         painter.drawRect(rect)
         painter.setPen(text_color)
@@ -79,6 +111,11 @@ class ArchitectureTrendView(QWidget):
             painter.drawEllipse(risk_points[0], 3, 3)
         else:
             painter.drawPolyline(risk_points)
+
+        if self._selected_index is not None and self._selected_index < len(health_points):
+            selected = health_points[self._selected_index]
+            painter.setPen(QPen(accent, 3))
+            painter.drawEllipse(selected, 6, 6)
 
         painter.setPen(text_color)
         first = self._records[0].run_id or "1"
