@@ -16,7 +16,8 @@ class ArchitectureGraphView(QGraphicsView):
 
     def __init__(self) -> None:
         super().__init__()
-        # Keep a strong Python reference to the scene. PySide can otherwise\n        # release a temporary QGraphicsScene wrapper during workspace creation\n        # on some Windows/PySide6 builds, which may terminate the process.\n        self._scene = QGraphicsScene()\n        self.setScene(self._scene)
+        self._scene = QGraphicsScene()
+        self.setScene(self._scene)
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
         self.setMinimumHeight(260)
         self._nodes: dict[str, QGraphicsEllipseItem] = {}
