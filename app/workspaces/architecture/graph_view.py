@@ -16,7 +16,7 @@ class ArchitectureGraphView(QGraphicsView):
 
     def __init__(self) -> None:
         super().__init__()
-        # Keep a strong Python reference to the scene. PySide can otherwise\n        # release a temporary QGraphicsScene wrapper during workspace creation\n        # on some Windows/PySide6 builds, which may terminate the process.\n        self._scene = QGraphicsScene(self)\n        self.setScene(self._scene)
+        # Keep a strong Python reference to the scene. PySide can otherwise\n        # release a temporary QGraphicsScene wrapper during workspace creation\n        # on some Windows/PySide6 builds, which may terminate the process.\n        self._scene = QGraphicsScene()\n        self.setScene(self._scene)
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
         self.setMinimumHeight(260)
         self._nodes: dict[str, QGraphicsEllipseItem] = {}
@@ -25,7 +25,7 @@ class ArchitectureGraphView(QGraphicsView):
         self._risk_levels: dict[str, str] = {}
 
     def show_summary(self, summary: ArchitectureSummary) -> None:
-        scene = self.scene(); scene.clear(); self._nodes.clear(); self._edges.clear()
+        scene = self._scene; scene.clear(); self._nodes.clear(); self._edges.clear()
         self._cycle_modules = {name for cycle in summary.cycles for name in cycle}
         self._risk_levels = {module.name: module.risk_level for module in summary.module_details}
         modules = list(summary.module_details)
@@ -72,7 +72,7 @@ class ArchitectureGraphView(QGraphicsView):
             line.setPen(QPen(Qt.GlobalColor.black if active else Qt.GlobalColor.lightGray,2.4 if active else 1.0))
 
     def _add_arrow(self, source_name: str, target_name: str, source: QPointF, target: QPointF) -> None:
-        scene = self.scene(); line = QGraphicsLineItem(source.x(),source.y(),target.x(),target.y()); line.setPen(QPen(Qt.GlobalColor.darkGray,1.2)); scene.addItem(line); self._edges.append((source_name,target_name,line))
+        scene = self._scene; line = QGraphicsLineItem(source.x(),source.y(),target.x(),target.y()); line.setPen(QPen(Qt.GlobalColor.darkGray,1.2)); scene.addItem(line); self._edges.append((source_name,target_name,line))
         angle = math.atan2(target.y()-source.y(),target.x()-source.x()); size=10.0
         left=QPointF(target.x()-size*math.cos(angle-0.45),target.y()-size*math.sin(angle-0.45)); right=QPointF(target.x()-size*math.cos(angle+0.45),target.y()-size*math.sin(angle+0.45))
         arrow=scene.addPolygon(QPolygonF([target,left,right]),QPen(Qt.GlobalColor.darkGray),QBrush(Qt.GlobalColor.darkGray)); arrow.setZValue(1)
@@ -83,7 +83,7 @@ class ArchitectureGraphView(QGraphicsView):
 
     def mouseReleaseEvent(self, event) -> None:  # type: ignore[no-untyped-def]
         super().mouseReleaseEvent(event)
-        for item in self.scene().selectedItems():
+        for item in self._scene.selectedItems():
             module_name=item.data(0)
             if module_name:
                 name=str(module_name); self._highlight(name); self.module_selected.emit(name); break
