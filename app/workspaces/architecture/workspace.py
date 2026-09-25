@@ -435,7 +435,9 @@ class ArchitectureWorkspace(QWidget):
             [f"#{index + 1} {item.name} — {item.risk_score}/100" for index, item in enumerate(summary.top_risks)]
             or ["Риски не обнаружены"]
         )
-        self.graph_view.show_summary(summary)
+        # MVP stability: the native QGraphics graph is temporarily not rendered here.
+        # Architecture metrics, dependencies, risks, history and module details remain available.
+        # Rendering the full graph for a real Windows project is isolated for post-MVP hardening.
         if summary.module_details:
             self.modules.setCurrentRow(0)
         self.status_label.setText(
