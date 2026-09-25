@@ -1,13 +1,22 @@
 import sys
+
 from PySide6.QtWidgets import QApplication
-from app.ui import MainWindow
+
+from app.platform import PlatformKernel
+from app.shell import DevHubShell
 
 
-def main():
-    app = QApplication(sys.argv)
-    window = MainWindow()
+def main() -> None:
+    application = QApplication(sys.argv)
+    application.setApplicationName("DevHub")
+    application.setOrganizationName("DevHub")
+
+    kernel = PlatformKernel()
+    window = DevHubShell(kernel)
     window.show()
-    sys.exit(app.exec())
+    kernel.start()
+
+    sys.exit(application.exec())
 
 
 if __name__ == "__main__":
