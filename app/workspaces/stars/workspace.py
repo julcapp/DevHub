@@ -148,6 +148,23 @@ class StarsWorkspace(QWidget):
         self.state_label.setText(f"Карточка {repo.full_name} обновлена локально.")
 
     def _sync_requested(self) -> None:
-        self.state_label.setText(
-            "Сервис GitHub Stars ещё не авторизован. Локальные заметки не будут перезаписаны при синхронизации."
-        )
+        from app.workspaces.stars.github_client import GitHubStarsClient, GitHubStarsError
+
+        self.sync_button.setEnabled(False)
+        self.state_label.setText("Загрузка GitHub Stars…")
+        try:
+            remote = GitHubStarsClient().fetch_all()
+            if self._store is not None:
+                self._repositories = self._store.merge_remote(remote)
+                self._store.save(self._repositories)
+            else:
+                self._repositories = remote
+            self._apply_filter()
+            self.state_label.setText(
+                f"Синхронизировано GitHub Stars: {len(self._repositories)}. "
+                "Локальные статусы и заметки сохранены."
+            )
+        except GitHubStarsError as error:
+            self.state_label.setText(str(error))
+        finally:
+            self.sync_button.setEnabled(True)
