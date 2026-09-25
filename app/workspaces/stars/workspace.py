@@ -35,7 +35,17 @@ class StarsWorkspace(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self._repositories: list[StarredRepository] = []
+        self._store = None
         self._build_ui()
+        self._load_local()
+
+    def _load_local(self) -> None:
+        from app.workspaces.stars.store import StarsStore
+        self._store = StarsStore()
+        self._repositories = list(self._store.load().values())
+        self._apply_filter()
+        if self._repositories:
+            self.state_label.setText(f"Локально сохранено карточек: {len(self._repositories)}.")
 
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -133,6 +143,8 @@ class StarsWorkspace(QWidget):
             return
         repo.status = ResearchStatus(self.status_combo.currentText())
         repo.notes = self.notes.toPlainText().strip()
+        if self._store is not None:
+            self._store.save(self._repositories)
         self.state_label.setText(f"Карточка {repo.full_name} обновлена локально.")
 
     def _sync_requested(self) -> None:
