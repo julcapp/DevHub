@@ -21,6 +21,7 @@ from app.workspaces.architecture import ArchitectureWorkspace
 from app.workspaces.explorer import ProjectExplorerWorkspace
 from app.workspaces.git import GitWorkspace
 from app.workspaces.notebook import EngineeringNotebookWorkspace
+from app.workspaces.stars import StarsWorkspace
 
 
 class PlaceholderWorkspace(QWidget):
@@ -140,6 +141,7 @@ class DevHubShell(QMainWindow):
             ("Проекты", lambda: PlaceholderWorkspace("Проекты", "Реестр инженерных проектов и их цифровых двойников.")),
             ("Проводник", lambda: ProjectExplorerWorkspace()),
             ("Знания", lambda: PlaceholderWorkspace("Знания", "Инженерные активы, связи и корпоративная память.")),
+            ("Звёздочки", lambda: StarsWorkspace()),
             ("Идеи", lambda: EngineeringNotebookWorkspace()),
             ("Исследования", lambda: PlaceholderWorkspace("Исследования", "Гипотезы, эксперименты, выводы и доказательства.")),
             ("Архитектура", lambda: ArchitectureWorkspace()),
