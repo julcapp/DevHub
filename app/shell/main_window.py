@@ -21,7 +21,6 @@ from app.workspaces.architecture import ArchitectureWorkspace
 from app.workspaces.explorer import ProjectExplorerWorkspace
 from app.workspaces.git import GitWorkspace
 from app.workspaces.notebook import EngineeringNotebookWorkspace
-from app.workspaces.stars import StarsWorkspace
 
 
 class PlaceholderWorkspace(QWidget):
@@ -141,7 +140,7 @@ class DevHubShell(QMainWindow):
             ("Проекты", lambda: PlaceholderWorkspace("Проекты", "Реестр инженерных проектов и их цифровых двойников.")),
             ("Проводник", lambda: ProjectExplorerWorkspace()),
             ("Знания", lambda: PlaceholderWorkspace("Знания", "Инженерные активы, связи и корпоративная память.")),
-            ("Звёздочки", lambda: StarsWorkspace()),
+            ("Звёздочки", self._create_stars_workspace),
             ("Идеи", lambda: EngineeringNotebookWorkspace()),
             ("Исследования", lambda: PlaceholderWorkspace("Исследования", "Гипотезы, эксперименты, выводы и доказательства.")),
             ("Архитектура", lambda: ArchitectureWorkspace()),
@@ -158,7 +157,7 @@ class DevHubShell(QMainWindow):
             self._workspace_factories[title] = factory
             self.navigation.addItem(QListWidgetItem(title))
 
-    def _activate_workspace(self, current: QListWidgetItem | None, _: QListWidgetItem | None) -> None:
+    @staticmethod\n    def _create_stars_workspace() -> QWidget:\n        from app.workspaces.stars import StarsWorkspace\n\n        return StarsWorkspace()\n\n    def _activate_workspace(self, current: QListWidgetItem | None, _: QListWidgetItem | None) -> None:
         if current is None:
             return
         title = current.text()
