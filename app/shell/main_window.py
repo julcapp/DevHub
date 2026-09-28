@@ -157,7 +157,13 @@ class DevHubShell(QMainWindow):
             self._workspace_factories[title] = factory
             self.navigation.addItem(QListWidgetItem(title))
 
-    @staticmethod\n    def _create_stars_workspace() -> QWidget:\n        from app.workspaces.stars import StarsWorkspace\n\n        return StarsWorkspace()\n\n    def _activate_workspace(self, current: QListWidgetItem | None, _: QListWidgetItem | None) -> None:
+    @staticmethod
+    def _create_stars_workspace() -> QWidget:
+        from app.workspaces.stars import StarsWorkspace
+
+        return StarsWorkspace()
+
+    def _activate_workspace(self, current: QListWidgetItem | None, _: QListWidgetItem | None) -> None:
         if current is None:
             return
         title = current.text()
