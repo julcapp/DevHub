@@ -19,3 +19,20 @@ def test_project_search_filters_by_name_and_language(monkeypatch):
     workspace.search.setText("missing")
     assert workspace.items.count() == 0
     workspace.close()
+
+
+def test_project_kind_filter(monkeypatch):
+    monkeypatch.setattr(ProjectsWorkspace, "reload", lambda self: None)
+    app = QApplication.instance() or QApplication([])
+    workspace = ProjectsWorkspace()
+    workspace.loaded([
+        {"full_name": "julcapp/original", "fork": False},
+        {"full_name": "julcapp/forked", "fork": True},
+    ])
+    workspace.kind_filter.setCurrentIndex(1)
+    assert workspace.items.count() == 1
+    assert "original" in workspace.items.item(0).text()
+    workspace.kind_filter.setCurrentIndex(2)
+    assert workspace.items.count() == 1
+    assert "forked" in workspace.items.item(0).text()
+    workspace.close()
