@@ -58,7 +58,11 @@ class StarsWorkspace(QWidget):
     def _load_local(self) -> None:
         from app.workspaces.stars.store import StarsStore
         self._store = StarsStore()
-        self._repositories = list(self._store.load().values())
+        try:
+            self._repositories = list(self._store.load().values())
+        except (OSError, ValueError) as error:
+            self.state_label.setText(f"Ошибка локальной библиотеки: {error}")
+            return
         self._apply_filter()
         if self._repositories:
             self.state_label.setText(f"Локально сохранено карточек: {len(self._repositories)}.")
@@ -160,7 +164,11 @@ class StarsWorkspace(QWidget):
         repo.status = ResearchStatus(self.status_combo.currentText())
         repo.notes = self.notes.toPlainText().strip()
         if self._store is not None:
-            self._store.save(self._repositories)
+            try:
+                self._store.save(self._repositories)
+            except OSError as error:
+                self.state_label.setText(f"Не удалось сохранить карточку: {error}")
+                return
         self.state_label.setText(f"Карточка {repo.full_name} обновлена локально.")
 
     def _sync_requested(self) -> None:
