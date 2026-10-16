@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from urllib.request import Request, urlopen
 from PySide6.QtCore import QObject, QThread, Signal, Slot
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QListWidget
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QListWidget, QTextBrowser
 
 
 class ProjectLoader(QObject):
@@ -43,6 +43,12 @@ class ProjectsWorkspace(QWidget):
         layout.addWidget(self.refresh)
         self.items = QListWidget()
         layout.addWidget(self.items)
+        self.details = QTextBrowser()
+        self.details.setOpenExternalLinks(True)
+        self.details.setMaximumHeight(190)
+        layout.addWidget(self.details)
+        self._projects = []
+        self.items.currentRowChanged.connect(self.show_project)
         self.status = QLabel("Подключение к GitHub…")
         layout.addWidget(self.status)
         self.reload()
@@ -68,10 +74,28 @@ class ProjectsWorkspace(QWidget):
 
     @Slot(object)
     def loaded(self, projects: object) -> None:
+        self._projects = projects
         self.items.clear()
         for repo in projects:
             self.items.addItem(f"{repo.get('full_name', '')} — {repo.get('description') or 'Без описания'}")
         self.status.setText(f"Загружено публичных репозиториев: {len(projects)}.")
+        if projects:
+            self.items.setCurrentRow(0)
+
+    @Slot(int)
+    def show_project(self, row: int) -> None:
+        from html import escape
+        if row < 0 or row >= len(self._projects):
+            self.details.clear()
+            return
+        repo = self._projects[row]
+        name = escape(repo.get("full_name") or "")
+        description = escape(repo.get("description") or "Описание не указано")
+        language = escape(repo.get("language") or "Не указан")
+        url = repo.get("html_url") or ""
+        safe_url = escape(url, quote=True) if url.startswith("https://github.com/") else ""
+        link = '<a href="' + safe_url + '">Открыть на GitHub</a>' if safe_url else ""
+        self.details.setHtml(f"<h3>{name}</h3><p>{description}</p><p>Язык: {language}</p>{link}")
 
     @Slot(str)
     def failed(self, error: str) -> None:
