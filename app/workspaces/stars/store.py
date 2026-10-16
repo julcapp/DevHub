@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from dataclasses import asdict
 from pathlib import Path
 
@@ -19,8 +21,8 @@ class StarsStore:
             return {}
         try:
             raw = json.loads(self.path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return {}
+        except (OSError, json.JSONDecodeError) as error:
+            raise ValueError(f"Не удалось прочитать {self.path}; файл сохранён без изменений.") from error
         result: dict[str, StarredRepository] = {}
         for item in raw.get("repositories", []):
             try:
@@ -45,10 +47,17 @@ class StarsStore:
             item = asdict(repo)
             item["status"] = repo.status.value
             payload["repositories"].append(item)
-        self.path.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        content = json.dumps(payload, ensure_ascii=False, indent=2)
+        fd, temporary = tempfile.mkstemp(prefix=".stars-", suffix=".json", dir=self.root)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(content)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, self.path)
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
 
     def merge_remote(self, remote: list[StarredRepository]) -> list[StarredRepository]:
         local = self.load()
@@ -59,4 +68,6 @@ class StarsStore:
                 repo.status = saved.status
                 repo.notes = saved.notes
             merged.append(repo)
+        seen = {repo.full_name for repo in merged}
+        merged.extend(repo for name, repo in local.items() if name not in seen)
         return merged
