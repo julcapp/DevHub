@@ -13,11 +13,16 @@ class Response(BytesIO):
         self.close()
 
 
-def test_client_requires_token(monkeypatch):
+def test_client_uses_public_stars_without_token(monkeypatch):
     monkeypatch.delenv("DEVHUB_GITHUB_TOKEN", raising=False)
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-    with pytest.raises(GitHubStarsError):
-        GitHubStarsClient().fetch_all()
+    seen = []
+    def fake_urlopen(request, **kwargs):
+        seen.append(request.full_url)
+        return Response(b"[]")
+    monkeypatch.setattr("app.workspaces.stars.github_client.urlopen", fake_urlopen)
+    assert GitHubStarsClient().fetch_all() == []
+    assert "/users/julcapp/starred?" in seen[0]
 
 
 def test_client_maps_github_payload(monkeypatch):
