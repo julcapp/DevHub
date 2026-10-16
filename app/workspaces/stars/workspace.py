@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
-from PySide6.QtCore import Qt, QObject, QThread, Signal, Slot
+from PySide6.QtCore import Qt, QObject, QThread, QTimer, Signal, Slot
 from PySide6.QtWidgets import (
     QComboBox, QHBoxLayout, QLabel, QLineEdit, QListWidget, QPushButton,
     QSplitter, QTextEdit, QVBoxLayout, QWidget,
@@ -56,8 +56,8 @@ class StarsWorkspace(QWidget):
         self._selected_repository: StarredRepository | None = None
         self._build_ui()
         self._load_local()
-        if not self._repositories:
-            self._sync_requested()
+        if self._store is not None and not self._repositories and not self.state_label.text().startswith("Ошибка"):
+            QTimer.singleShot(0, self._sync_requested)
 
     def _load_local(self) -> None:
         from app.workspaces.stars.store import StarsStore
