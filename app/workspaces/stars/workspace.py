@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QObject, QThread, Signal, Slot
 from PySide6.QtWidgets import (
     QComboBox, QHBoxLayout, QLabel, QLineEdit, QListWidget, QPushButton,
     QSplitter, QTextEdit, QVBoxLayout, QWidget,
@@ -29,6 +29,20 @@ class StarredRepository:
     notes: str = ""
 
 
+class StarsSyncWorker(QObject):
+    finished = Signal(object)
+    failed = Signal(str)
+
+    @Slot()
+    def run(self) -> None:
+        from app.workspaces.stars.github_client import GitHubStarsClient
+
+        try:
+            self.finished.emit(GitHubStarsClient().fetch_all())
+        except Exception as error:
+            self.failed.emit(str(error))
+
+
 class StarsWorkspace(QWidget):
     """Библиотека GitHub Stars: источники для исследования, а не подключённый код."""
 
@@ -36,6 +50,8 @@ class StarsWorkspace(QWidget):
         super().__init__()
         self._repositories: list[StarredRepository] = []
         self._store = None
+        self._sync_thread: QThread | None = None
+        self._sync_worker: StarsSyncWorker | None = None
         self._build_ui()
         self._load_local()
 
@@ -148,23 +164,47 @@ class StarsWorkspace(QWidget):
         self.state_label.setText(f"Карточка {repo.full_name} обновлена локально.")
 
     def _sync_requested(self) -> None:
-        from app.workspaces.stars.github_client import GitHubStarsClient, GitHubStarsError
-
+        if self._sync_thread is not None:
+            return
         self.sync_button.setEnabled(False)
         self.state_label.setText("Загрузка GitHub Stars…")
+        thread = QThread(self)
+        worker = StarsSyncWorker()
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.finished.connect(self._sync_completed)
+        worker.failed.connect(self._sync_failed)
+        worker.finished.connect(thread.quit)
+        worker.failed.connect(thread.quit)
+        thread.finished.connect(worker.deleteLater)
+        thread.finished.connect(self._sync_cleanup)
+        thread.finished.connect(thread.deleteLater)
+        self._sync_thread = thread
+        self._sync_worker = worker
+        thread.start()
+
+    @Slot(object)
+    def _sync_completed(self, remote: object) -> None:
         try:
-            remote = GitHubStarsClient().fetch_all()
+            repositories = remote
             if self._store is not None:
-                self._repositories = self._store.merge_remote(remote)
-                self._store.save(self._repositories)
-            else:
-                self._repositories = remote
+                repositories = self._store.merge_remote(remote)
+                self._store.save(repositories)
+            self._repositories = repositories
             self._apply_filter()
             self.state_label.setText(
-                f"Синхронизировано GitHub Stars: {len(self._repositories)}. "
+                f"Синхронизировано GitHub Stars: {len(remote)}. "
                 "Локальные статусы и заметки сохранены."
             )
-        except GitHubStarsError as error:
-            self.state_label.setText(str(error))
-        finally:
-            self.sync_button.setEnabled(True)
+        except (OSError, ValueError) as error:
+            self.state_label.setText(f"Не удалось сохранить Stars: {error}")
+
+    @Slot(str)
+    def _sync_failed(self, message: str) -> None:
+        self.state_label.setText(f"Синхронизация не выполнена: {message}")
+
+    @Slot()
+    def _sync_cleanup(self) -> None:
+        self._sync_thread = None
+        self._sync_worker = None
+        self.sync_button.setEnabled(True)
