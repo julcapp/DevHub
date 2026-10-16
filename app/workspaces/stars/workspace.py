@@ -52,6 +52,7 @@ class StarsWorkspace(QWidget):
         self._store = None
         self._sync_thread: QThread | None = None
         self._sync_worker: StarsSyncWorker | None = None
+        self._selected_repository: StarredRepository | None = None
         self._build_ui()
         self._load_local()
 
@@ -131,6 +132,7 @@ class StarsWorkspace(QWidget):
         self._apply_filter()
 
     def _apply_filter(self) -> None:
+        self._preserve_editor()
         query = self.search.text().strip().lower()
         self.list_widget.clear()
         for index, repo in enumerate(self._repositories):
@@ -147,7 +149,9 @@ class StarsWorkspace(QWidget):
         return self._repositories[int(item.data(Qt.ItemDataRole.UserRole))]
 
     def _show_repository(self, _: int) -> None:
+        self._preserve_editor()
         repo = self._current_repository()
+        self._selected_repository = repo
         if repo is None:
             return
         self.name_label.setText(repo.full_name)
@@ -156,13 +160,18 @@ class StarsWorkspace(QWidget):
         self.status_combo.setCurrentText(repo.status.value)
         self.notes.setPlainText(repo.notes)
 
+    def _preserve_editor(self) -> None:
+        if self._selected_repository is None:
+            return
+        self._selected_repository.status = ResearchStatus(self.status_combo.currentText())
+        self._selected_repository.notes = self.notes.toPlainText().strip()
+
     def _save_card(self) -> None:
         repo = self._current_repository()
         if repo is None:
             self.state_label.setText("Сначала выберите репозиторий.")
             return
-        repo.status = ResearchStatus(self.status_combo.currentText())
-        repo.notes = self.notes.toPlainText().strip()
+        self._preserve_editor()
         if self._store is not None:
             try:
                 self._store.save(self._repositories)
@@ -172,6 +181,13 @@ class StarsWorkspace(QWidget):
         self.state_label.setText(f"Карточка {repo.full_name} обновлена локально.")
 
     def _sync_requested(self) -> None:
+        self._preserve_editor()
+        if self._store is not None:
+            try:
+                self._store.save(self._repositories)
+            except OSError as error:
+                self.state_label.setText(f"Не удалось сохранить изменения перед синхронизацией: {error}")
+                return
         if self._sync_thread is not None:
             return
         self.sync_button.setEnabled(False)
