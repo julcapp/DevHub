@@ -36,3 +36,14 @@ def test_project_kind_filter(monkeypatch):
     assert workspace.items.count() == 1
     assert "forked" in workspace.items.item(0).text()
     workspace.close()
+
+
+def test_failed_refresh_preserves_loaded_projects(monkeypatch):
+    monkeypatch.setattr(ProjectsWorkspace, "reload", lambda self: None)
+    app = QApplication.instance() or QApplication([])
+    workspace = ProjectsWorkspace()
+    workspace.loaded([{"full_name": "julcapp/DevHub", "fork": False}])
+    workspace.failed("Нет связи с GitHub.")
+    assert workspace.items.count() == 1
+    assert "Нет связи" in workspace.status.text()
+    workspace.close()
