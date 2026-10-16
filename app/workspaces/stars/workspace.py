@@ -56,6 +56,8 @@ class StarsWorkspace(QWidget):
         self._selected_repository: StarredRepository | None = None
         self._build_ui()
         self._load_local()
+        if not self._repositories:
+            self._sync_requested()
 
     def _load_local(self) -> None:
         from app.workspaces.stars.store import StarsStore
@@ -84,7 +86,7 @@ class StarsWorkspace(QWidget):
         self.search = QLineEdit()
         self.search.setPlaceholderText("Поиск по звёздочкам")
         self.sync_button = QPushButton("Синхронизировать с GitHub")
-        self.sync_button.setToolTip("Подключение GitHub Stars будет активировано через сервис синхронизации.")
+        self.sync_button.setToolTip("Обновить избранные репозитории GitHub; публичные Stars доступны без токена.")
         self.sync_button.clicked.connect(self._sync_requested)
         toolbar.addWidget(self.search, 1)
         toolbar.addWidget(self.sync_button)
