@@ -52,6 +52,7 @@ class StarsWorkspace(QWidget):
         self._store = None
         self._sync_thread: QThread | None = None
         self._sync_worker: StarsSyncWorker | None = None
+        self._closing_after_sync = False
         self._selected_repository: StarredRepository | None = None
         self._build_ui()
         self._load_local()
@@ -232,3 +233,14 @@ class StarsWorkspace(QWidget):
         self._sync_thread = None
         self._sync_worker = None
         self.sync_button.setEnabled(True)
+        if self._closing_after_sync:
+            self._closing_after_sync = False
+            self.close()
+
+    def closeEvent(self, event) -> None:  # type: ignore[override]
+        if self._sync_thread is not None and self._sync_thread.isRunning():
+            self._closing_after_sync = True
+            self.state_label.setText("Ожидаем завершения синхронизации перед закрытием…")
+            event.ignore()
+            return
+        super().closeEvent(event)
