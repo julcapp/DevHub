@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from urllib.request import Request, urlopen
 from PySide6.QtCore import QObject, QThread, Signal, Slot
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QListWidget, QTextBrowser
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QListWidget, QTextBrowser, QLineEdit
 
 
 class ProjectLoader(QObject):
@@ -41,6 +41,10 @@ class ProjectsWorkspace(QWidget):
         self.refresh = QPushButton("Обновить проекты из GitHub")
         self.refresh.clicked.connect(self.reload)
         layout.addWidget(self.refresh)
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("Поиск по названию, описанию и языку")
+        self.search.textChanged.connect(self.filter_projects)
+        layout.addWidget(self.search)
         self.items = QListWidget()
         layout.addWidget(self.items)
         self.details = QTextBrowser()
@@ -48,6 +52,7 @@ class ProjectsWorkspace(QWidget):
         self.details.setMaximumHeight(190)
         layout.addWidget(self.details)
         self._projects = []
+        self._visible_projects = []
         self.items.currentRowChanged.connect(self.show_project)
         self.status = QLabel("Подключение к GitHub…")
         layout.addWidget(self.status)
@@ -75,20 +80,32 @@ class ProjectsWorkspace(QWidget):
     @Slot(object)
     def loaded(self, projects: object) -> None:
         self._projects = projects
+        self.filter_projects()
+
+
+    @Slot()
+    def filter_projects(self) -> None:
+        query = self.search.text().strip().casefold()
+        self._visible_projects = [
+            repo for repo in self._projects
+            if query in " ".join(str(repo.get(field) or "") for field in ("full_name", "description", "language")).casefold()
+        ]
         self.items.clear()
-        for repo in projects:
+        for repo in self._visible_projects:
             self.items.addItem(f"{repo.get('full_name', '')} — {repo.get('description') or 'Без описания'}")
-        self.status.setText(f"Загружено публичных репозиториев: {len(projects)}.")
-        if projects:
+        self.status.setText(f"Показано {len(self._visible_projects)} из {len(self._projects)} публичных репозиториев.")
+        if self._visible_projects:
             self.items.setCurrentRow(0)
+        else:
+            self.details.clear()
 
     @Slot(int)
     def show_project(self, row: int) -> None:
         from html import escape
-        if row < 0 or row >= len(self._projects):
+        if row < 0 or row >= len(self._visible_projects):
             self.details.clear()
             return
-        repo = self._projects[row]
+        repo = self._visible_projects[row]
         name = escape(repo.get("full_name") or "")
         description = escape(repo.get("description") or "Описание не указано")
         language = escape(repo.get("language") or "Не указан")
