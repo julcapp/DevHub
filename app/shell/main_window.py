@@ -137,7 +137,7 @@ class DevHubShell(QMainWindow):
     def _register_workspaces(self) -> None:
         entries = [
             ("Обзор", lambda: DashboardWorkspace()),
-            ("Проекты", lambda: PlaceholderWorkspace("Проекты", "Реестр инженерных проектов и их цифровых двойников.")),
+            ("Проекты", self._create_projects_workspace),
             ("Проводник", lambda: ProjectExplorerWorkspace()),
             ("Знания", lambda: PlaceholderWorkspace("Знания", "Инженерные активы, связи и корпоративная память.")),
             ("Звёздочки", self._create_stars_workspace),
@@ -156,6 +156,11 @@ class DevHubShell(QMainWindow):
         for title, factory in entries:
             self._workspace_factories[title] = factory
             self.navigation.addItem(QListWidgetItem(title))
+
+    @staticmethod
+    def _create_projects_workspace() -> QWidget:
+        from app.workspaces.projects_workspace import ProjectsWorkspace
+        return ProjectsWorkspace()
 
     @staticmethod
     def _create_stars_workspace() -> QWidget:
