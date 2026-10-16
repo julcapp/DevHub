@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QListWidget, QTextBrowser, QLineEdit, QComboBox
@@ -26,8 +27,17 @@ class ProjectLoader(QObject):
                 if len(batch) < 100:
                     break
             self.finished.emit(projects)
+        except HTTPError as error:
+            if error.code in (403, 429):
+                self.failed.emit("GitHub временно ограничил число запросов. Повторите позже или настройте авторизацию.")
+            elif error.code == 404:
+                self.failed.emit("Профиль GitHub julcapp не найден.")
+            else:
+                self.failed.emit(f"GitHub вернул ошибку HTTP {error.code}.")
+        except (URLError, TimeoutError) as error:
+            self.failed.emit("Нет связи с GitHub. Проверьте интернет и повторите попытку.")
         except Exception as error:
-            self.failed.emit(str(error))
+            self.failed.emit(f"Ошибка обработки ответа GitHub: {error}")
 
 
 class ProjectsWorkspace(QWidget):
@@ -66,7 +76,7 @@ class ProjectsWorkspace(QWidget):
         if self._thread is not None:
             return
         self.refresh.setEnabled(False)
-        self.status.setText("Загрузка публичных репозиториев…")
+        self.status.setText("Загрузка публичных репозиториев… Сохранённый список остаётся доступен.")
         thread = QThread(self)
         worker = ProjectLoader()
         worker.moveToThread(thread)
@@ -123,7 +133,7 @@ class ProjectsWorkspace(QWidget):
 
     @Slot(str)
     def failed(self, error: str) -> None:
-        self.status.setText(f"Не удалось загрузить проекты: {error}")
+        self.status.setText(f"Не удалось обновить проекты: {error} Ранее загруженные данные сохранены.")
 
     @Slot()
     def cleanup(self) -> None:
