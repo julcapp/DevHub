@@ -43,8 +43,9 @@ class ProjectsWorkspace(QWidget):
         layout.addWidget(self.refresh)
         self.items = QListWidget()
         layout.addWidget(self.items)
-        self.status = QLabel("Нажмите «Обновить проекты из GitHub».")
+        self.status = QLabel("Подключение к GitHub…")
         layout.addWidget(self.status)
+        self.reload()
 
     def reload(self) -> None:
         if self._thread is not None:
