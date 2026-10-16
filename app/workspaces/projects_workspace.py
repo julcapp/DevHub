@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from urllib.request import Request, urlopen
 from PySide6.QtCore import QObject, QThread, Signal, Slot
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QListWidget, QTextBrowser, QLineEdit
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QListWidget, QTextBrowser, QLineEdit, QComboBox
 
 
 class ProjectLoader(QObject):
@@ -45,6 +45,10 @@ class ProjectsWorkspace(QWidget):
         self.search.setPlaceholderText("Поиск по названию, описанию и языку")
         self.search.textChanged.connect(self.filter_projects)
         layout.addWidget(self.search)
+        self.kind_filter = QComboBox()
+        self.kind_filter.addItems(["Все репозитории", "Собственные проекты", "Форки"])
+        self.kind_filter.currentIndexChanged.connect(self.filter_projects)
+        layout.addWidget(self.kind_filter)
         self.items = QListWidget()
         layout.addWidget(self.items)
         self.details = QTextBrowser()
@@ -86,13 +90,15 @@ class ProjectsWorkspace(QWidget):
     @Slot()
     def filter_projects(self) -> None:
         query = self.search.text().strip().casefold()
+        kind = self.kind_filter.currentIndex()
         self._visible_projects = [
             repo for repo in self._projects
-            if query in " ".join(str(repo.get(field) or "") for field in ("full_name", "description", "language")).casefold()
+            if (kind == 0 or bool(repo.get("fork")) == (kind == 2))
+            and query in " ".join(str(repo.get(field) or "") for field in ("full_name", "description", "language")).casefold()
         ]
         self.items.clear()
         for repo in self._visible_projects:
-            self.items.addItem(f"{repo.get('full_name', '')} — {repo.get('description') or 'Без описания'}")
+            self.items.addItem(f"{'[Форк]' if repo.get('fork') else '[Проект]'} {repo.get('full_name', '')} — {repo.get('description') or 'Без описания'}")
         self.status.setText(f"Показано {len(self._visible_projects)} из {len(self._projects)} публичных репозиториев.")
         if self._visible_projects:
             self.items.setCurrentRow(0)
@@ -112,7 +118,8 @@ class ProjectsWorkspace(QWidget):
         url = repo.get("html_url") or ""
         safe_url = escape(url, quote=True) if url.startswith("https://github.com/") else ""
         link = '<a href="' + safe_url + '">Открыть на GitHub</a>' if safe_url else ""
-        self.details.setHtml(f"<h3>{name}</h3><p>{description}</p><p>Язык: {language}</p>{link}")
+        kind = "Форк стороннего проекта" if repo.get("fork") else "Собственный репозиторий"
+        self.details.setHtml(f"<h3>{name}</h3><p>{description}</p><p>Тип: {kind}</p><p>Язык: {language}</p>{link}")
 
     @Slot(str)
     def failed(self, error: str) -> None:
