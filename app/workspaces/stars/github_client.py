@@ -23,6 +23,7 @@ class GitHubStarsClient:
 
     token: str | None = None
     api_url: str = "https://api.github.com"
+    public_username: str = "julcapp"
 
     def __post_init__(self) -> None:
         if self.token is None:
@@ -33,30 +34,28 @@ class GitHubStarsClient:
         return bool(self.token)
 
     def fetch_all(self) -> list[StarredRepository]:
-        if not self.token:
-            raise GitHubStarsError(
-                "GitHub не авторизован. Настройте DEVHUB_GITHUB_TOKEN с read-only доступом."
-            )
         repositories: list[StarredRepository] = []
         page = 1
         while True:
-            url = f"{self.api_url}/user/starred?per_page=100&page={page}"
+            endpoint = "user/starred" if self.token else f"users/{self.public_username}/starred"
+            url = f"{self.api_url}/{endpoint}?per_page=100&page={page}"
             request = Request(
                 url,
                 headers={
                     "Accept": "application/vnd.github+json",
-                    "Authorization": f"Bearer {self.token}",
                     "X-GitHub-Api-Version": "2022-11-28",
                     "User-Agent": "DevHub-Stars",
                 },
             )
+            if self.token:
+                request.add_header("Authorization", f"Bearer {self.token}")
             try:
                 with urlopen(request, timeout=15) as response:
                     payload = json.load(response)
             except HTTPError as error:
                 if error.code in (401, 403):
                     raise GitHubStarsError(
-                        "GitHub отклонил авторизацию. Проверьте токен и его права."
+                        "GitHub ограничил доступ. Проверьте подключение или токен."
                     ) from error
                 raise GitHubStarsError(f"GitHub API: HTTP {error.code}.") from error
             except (URLError, TimeoutError, OSError) as error:
