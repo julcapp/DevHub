@@ -5,7 +5,7 @@ import json
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from PySide6.QtCore import QObject, QThread, Signal, Slot
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QListWidget, QTextBrowser, QLineEdit, QComboBox
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QListWidget, QLineEdit, QComboBox
 
 
 class ProjectLoader(QObject):
@@ -66,9 +66,8 @@ class ProjectsWorkspace(QWidget):
         layout.addWidget(self.sort_filter)
         self.items = QListWidget()
         layout.addWidget(self.items)
-        self.details = QTextBrowser()
-        self.details.setOpenExternalLinks(True)
-        self.details.setMaximumHeight(190)
+        self.details = QLabel("Выберите проект — сведения появятся в панели «Инспектор» справа.")
+        self.details.setWordWrap(True)
         layout.addWidget(self.details)
         self._projects = []
         self._visible_projects = []
@@ -145,10 +144,7 @@ class ProjectsWorkspace(QWidget):
         kind = "Форк стороннего проекта" if repo.get("fork") else "Собственный репозиторий"
         stars = int(repo.get("stargazers_count") or 0)
         updated = escape((repo.get("updated_at") or "Неизвестно")[:10])
-        self.details.setHtml(
-            f"<h3>{name}</h3><p>{description}</p><p>Тип: {kind}</p>"
-            f"<p>Язык: {language} · Звёзд: {stars} · Обновлён: {updated}</p>{link}"
-        )
+        self.details.setText(f"Выбран проект: {name}. Подробности — в панели «Инспектор».")
 
     @Slot(str)
     def failed(self, error: str) -> None:
