@@ -59,6 +59,10 @@ class ProjectsWorkspace(QWidget):
         self.kind_filter.addItems(["Все репозитории", "Собственные проекты", "Форки"])
         self.kind_filter.currentIndexChanged.connect(self.filter_projects)
         layout.addWidget(self.kind_filter)
+        self.sort_filter = QComboBox()
+        self.sort_filter.addItems(["Недавно обновлённые", "По названию", "По звёздам"])
+        self.sort_filter.currentIndexChanged.connect(self.filter_projects)
+        layout.addWidget(self.sort_filter)
         self.items = QListWidget()
         layout.addWidget(self.items)
         self.details = QTextBrowser()
@@ -106,6 +110,13 @@ class ProjectsWorkspace(QWidget):
             if (kind == 0 or bool(repo.get("fork")) == (kind == 2))
             and query in " ".join(str(repo.get(field) or "") for field in ("full_name", "description", "language")).casefold()
         ]
+        sort_mode = self.sort_filter.currentIndex()
+        if sort_mode == 0:
+            self._visible_projects.sort(key=lambda repo: repo.get("updated_at") or "", reverse=True)
+        elif sort_mode == 1:
+            self._visible_projects.sort(key=lambda repo: (repo.get("full_name") or "").casefold())
+        else:
+            self._visible_projects.sort(key=lambda repo: int(repo.get("stargazers_count") or 0), reverse=True)
         self.items.clear()
         for repo in self._visible_projects:
             self.items.addItem(f"{'[Форк]' if repo.get('fork') else '[Проект]'} {repo.get('full_name', '')} — {repo.get('description') or 'Без описания'}")
@@ -129,7 +140,12 @@ class ProjectsWorkspace(QWidget):
         safe_url = escape(url, quote=True) if url.startswith("https://github.com/") else ""
         link = '<a href="' + safe_url + '">Открыть на GitHub</a>' if safe_url else ""
         kind = "Форк стороннего проекта" if repo.get("fork") else "Собственный репозиторий"
-        self.details.setHtml(f"<h3>{name}</h3><p>{description}</p><p>Тип: {kind}</p><p>Язык: {language}</p>{link}")
+        stars = int(repo.get("stargazers_count") or 0)
+        updated = escape((repo.get("updated_at") or "Неизвестно")[:10])
+        self.details.setHtml(
+            f"<h3>{name}</h3><p>{description}</p><p>Тип: {kind}</p>"
+            f"<p>Язык: {language} · Звёзд: {stars} · Обновлён: {updated}</p>{link}"
+        )
 
     @Slot(str)
     def failed(self, error: str) -> None:
