@@ -47,3 +47,20 @@ def test_failed_refresh_preserves_loaded_projects(monkeypatch):
     assert workspace.items.count() == 1
     assert "Нет связи" in workspace.status.text()
     workspace.close()
+
+
+def test_project_sorting_by_stars_and_name(monkeypatch):
+    monkeypatch.setattr(ProjectsWorkspace, "reload", lambda self: None)
+    app = QApplication.instance() or QApplication([])
+    workspace = ProjectsWorkspace()
+    workspace.loaded([
+        {"full_name": "julcapp/zeta", "stargazers_count": 2, "updated_at": "2026-01-01T00:00:00Z"},
+        {"full_name": "julcapp/alpha", "stargazers_count": 20, "updated_at": "2025-01-01T00:00:00Z"},
+    ])
+    workspace.sort_filter.setCurrentIndex(2)
+    assert "alpha" in workspace.items.item(0).text()
+    workspace.sort_filter.setCurrentIndex(1)
+    assert "alpha" in workspace.items.item(0).text()
+    workspace.sort_filter.setCurrentIndex(0)
+    assert "zeta" in workspace.items.item(0).text()
+    workspace.close()
