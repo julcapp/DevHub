@@ -41,6 +41,7 @@ class ProjectLoader(QObject):
 
 
 class ProjectsWorkspace(QWidget):
+    project_selected = Signal(object)
     def __init__(self) -> None:
         super().__init__()
         self._thread = None
@@ -131,8 +132,10 @@ class ProjectsWorkspace(QWidget):
         from html import escape
         if row < 0 or row >= len(self._visible_projects):
             self.details.clear()
+            self.project_selected.emit(None)
             return
         repo = self._visible_projects[row]
+        self.project_selected.emit(repo)
         name = escape(repo.get("full_name") or "")
         description = escape(repo.get("description") or "Описание не указано")
         language = escape(repo.get("language") or "Не указан")
