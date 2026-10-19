@@ -144,7 +144,7 @@ class ProjectsWorkspace(QWidget):
         kind = "Форк стороннего проекта" if repo.get("fork") else "Собственный репозиторий"
         stars = int(repo.get("stargazers_count") or 0)
         updated = escape((repo.get("updated_at") or "Неизвестно")[:10])
-        self.details.setText(f"Выбран проект: {name}. Подробности — в панели «Инспектор».")
+        self.details.setText(f"Выбран проект: {name}. Подробности — в панели «Инспектор». " + link)
 
     @Slot(str)
     def failed(self, error: str) -> None:
