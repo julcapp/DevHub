@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt
 
 from PySide6.QtWidgets import (
     QFrame,
+    QPushButton,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -68,6 +69,7 @@ class DevHubShell(QMainWindow):
         self.navigation = QListWidget()
         self.workspace_host = QStackedWidget()
         self.inspector = QTextEdit()
+        self._inspector_visible = True
         self.bottom_panel = QTextEdit()
         self._workspace_factories: dict[str, Callable[[], QWidget]] = {}
         self._workspace_indexes: dict[str, int] = {}
@@ -116,6 +118,7 @@ class DevHubShell(QMainWindow):
         center_layout.addWidget(self.bottom_panel)
 
         inspector_frame = QFrame()
+        self.inspector_frame = inspector_frame
         inspector_frame.setObjectName("InspectorFrame")
         inspector_frame.setMinimumWidth(215)
         inspector_frame.setMaximumWidth(430)
@@ -136,6 +139,10 @@ class DevHubShell(QMainWindow):
             self.content_splitter.addWidget(widget)
         self.content_splitter.setStretchFactor(1, 1)
         self.content_splitter.setSizes([220, 980, 270])
+        self.inspector_toggle = QPushButton("Скрыть инспектор")
+        self.inspector_toggle.setToolTip("Освободить место для рабочего пространства")
+        self.inspector_toggle.clicked.connect(self._toggle_inspector)
+        title_layout.addWidget(self.inspector_toggle)
         root_layout.addWidget(title_bar)
         root_layout.addWidget(self.content_splitter, 1)
         self.setCentralWidget(root)
@@ -207,6 +214,16 @@ class DevHubShell(QMainWindow):
             f"<p><b>Тип:</b> {kind}</p><p><b>Язык:</b> {language}</p>"
             f"<p><b>Звёзд:</b> {stars}</p><p><b>Обновлён:</b> {updated}</p>"
         )
+
+    def _toggle_inspector(self) -> None:
+        self._inspector_visible = not self._inspector_visible
+        self.inspector_frame.setVisible(self._inspector_visible)
+        self.inspector_toggle.setText("Скрыть инспектор" if self._inspector_visible else "Показать инспектор")
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if self.width() < 1100 and self._inspector_visible:
+            self._toggle_inspector()
 
     def _bind_events(self) -> None:
         self.kernel.events.subscribe("platform.started", self._write_event)
