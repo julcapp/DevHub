@@ -137,14 +137,9 @@ class ProjectsWorkspace(QWidget):
         repo = self._visible_projects[row]
         self.project_selected.emit(repo)
         name = escape(repo.get("full_name") or "")
-        description = escape(repo.get("description") or "Описание не указано")
-        language = escape(repo.get("language") or "Не указан")
         url = repo.get("html_url") or ""
         safe_url = escape(url, quote=True) if url.startswith("https://github.com/") else ""
         link = '<a href="' + safe_url + '">Открыть на GitHub</a>' if safe_url else ""
-        kind = "Форк стороннего проекта" if repo.get("fork") else "Собственный репозиторий"
-        stars = int(repo.get("stargazers_count") or 0)
-        updated = escape((repo.get("updated_at") or "Неизвестно")[:10])
         self.details.setText(f"Выбран проект: {name}. Подробности — в панели «Инспектор». " + link)
 
     @Slot(str)
