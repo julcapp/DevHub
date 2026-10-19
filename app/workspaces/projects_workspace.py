@@ -68,6 +68,7 @@ class ProjectsWorkspace(QWidget):
         layout.addWidget(self.items)
         self.details = QLabel("Выберите проект — сведения появятся в панели «Инспектор» справа.")
         self.details.setWordWrap(True)
+        self.details.setOpenExternalLinks(True)
         layout.addWidget(self.details)
         self._projects = []
         self._visible_projects = []
