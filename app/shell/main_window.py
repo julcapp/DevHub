@@ -141,6 +141,7 @@ class DevHubShell(QMainWindow):
         self.content_splitter.setSizes([220, 980, 270])
         self.inspector_toggle = QPushButton("Скрыть инспектор")
         self.inspector_toggle.setToolTip("Освободить место для рабочего пространства")
+        self.inspector_toggle.setObjectName("InspectorToggle")
         self.inspector_toggle.clicked.connect(self._toggle_inspector)
         title_layout.addWidget(self.inspector_toggle)
         root_layout.addWidget(title_bar)
@@ -254,6 +255,15 @@ class DevHubShell(QMainWindow):
             QListWidget#Navigation::item:hover:!selected { background: #263447; color: white; }
             QSplitter::handle { background: #dbe3ec; width: 5px; }
             QSplitter::handle:hover { background: #93c5fd; }
+            QPushButton#InspectorToggle { background: #334155; color: #f8fafc; border: 1px solid #64748b; border-radius: 7px; padding: 8px 12px; font-weight: 600; }
+            QPushButton#InspectorToggle:hover { background: #475569; }
+            QPushButton { background: #2563eb; color: white; border: none; border-radius: 7px; padding: 9px 14px; font-weight: 600; }
+            QPushButton:hover { background: #1d4ed8; }
+            QPushButton:disabled { background: #cbd5e1; color: #64748b; }
+            QLineEdit, QComboBox { min-height: 30px; border: 1px solid #cbd5e1; border-radius: 7px; padding: 5px 9px; background: white; }
+            QLineEdit:focus, QComboBox:focus { border: 2px solid #3b82f6; }
+            QListWidget::item:selected { background: #dbeafe; color: #1e3a8a; }
+            QListWidget#Navigation::item:selected { background: #2563eb; color: white; font-weight: 700; border-left: 4px solid #93c5fd; }
             QLabel#WorkspaceTitle { font-size: 24px; font-weight: 700; }
             QLabel#WorkspaceDescription { font-size: 14px; color: #4b5563; padding-top: 8px; }
             QLabel#ArchitectureMetric { font-size: 18px; font-weight: 700; }
