@@ -88,6 +88,7 @@ class DevHubShell(QMainWindow):
         subtitle.setObjectName("ProductSubtitle")
         title_layout.addWidget(title)
         title_layout.addWidget(subtitle)
+        title_bar.setStyleSheet("QFrame#TitleBar { background-color: #1f2937; } QLabel#ProductTitle { background: transparent; color: #ffffff; } QLabel#ProductSubtitle { background: transparent; color: #cbd5e1; } QLabel#KernelState { background: transparent; color: #86efac; }")
         title_layout.addStretch()
         kernel_state = QLabel("● Ядро: готово")
         kernel_state.setObjectName("KernelState")
