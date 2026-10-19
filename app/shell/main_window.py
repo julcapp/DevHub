@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from html import escape
+from PySide6.QtCore import Qt
 
 from PySide6.QtWidgets import (
     QFrame,
@@ -9,6 +11,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QSplitter,
     QStackedWidget,
     QStatusBar,
     QTextEdit,
@@ -98,7 +101,8 @@ class DevHubShell(QMainWindow):
         body.setContentsMargins(0, 0, 0, 0)
         body.setSpacing(0)
         self.navigation.setObjectName("Navigation")
-        self.navigation.setFixedWidth(245)
+        self.navigation.setMinimumWidth(175)
+        self.navigation.setMaximumWidth(320)
         self.navigation.currentItemChanged.connect(self._activate_workspace)
 
         center = QWidget()
@@ -113,7 +117,8 @@ class DevHubShell(QMainWindow):
 
         inspector_frame = QFrame()
         inspector_frame.setObjectName("InspectorFrame")
-        inspector_frame.setFixedWidth(300)
+        inspector_frame.setMinimumWidth(215)
+        inspector_frame.setMaximumWidth(430)
         inspector_layout = QVBoxLayout(inspector_frame)
         inspector_title = QLabel("Инспектор")
         inspector_title.setObjectName("PanelTitle")
@@ -125,11 +130,14 @@ class DevHubShell(QMainWindow):
         inspector_layout.addWidget(inspector_title)
         inspector_layout.addWidget(self.inspector)
 
-        body.addWidget(self.navigation)
-        body.addWidget(center, 1)
-        body.addWidget(inspector_frame)
+        self.content_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.content_splitter.setChildrenCollapsible(False)
+        for widget in (self.navigation, center, inspector_frame):
+            self.content_splitter.addWidget(widget)
+        self.content_splitter.setStretchFactor(1, 1)
+        self.content_splitter.setSizes([220, 980, 270])
         root_layout.addWidget(title_bar)
-        root_layout.addLayout(body, 1)
+        root_layout.addWidget(self.content_splitter, 1)
         self.setCentralWidget(root)
         self.setStatusBar(QStatusBar())
         self.statusBar().showMessage("DevHub готов к работе")
@@ -176,9 +184,29 @@ class DevHubShell(QMainWindow):
         if title not in self._workspace_indexes:
             widget = self._workspace_factories[title]()
             self._workspace_indexes[title] = self.workspace_host.addWidget(widget)
+            if title == "Проекты":
+                widget.project_selected.connect(self._show_project_in_inspector)
         self.workspace_host.setCurrentIndex(self._workspace_indexes[title])
+        if title != "Проекты":
+            self.inspector.setPlainText("Выберите объект для просмотра его свойств.")
         self.statusBar().showMessage(f"Открыто рабочее пространство: {title}")
         self.kernel.events.publish("workspace.activated", {"workspace": title})
+
+    def _show_project_in_inspector(self, repo: object) -> None:
+        if not isinstance(repo, dict):
+            self.inspector.setPlainText("Выберите проект в списке.")
+            return
+        name = escape(str(repo.get("full_name") or "Без названия"))
+        description = escape(str(repo.get("description") or "Описание не указано"))
+        language = escape(str(repo.get("language") or "Не указан"))
+        updated = escape(str(repo.get("updated_at") or "Неизвестно")[:10])
+        stars = int(repo.get("stargazers_count") or 0)
+        kind = "Форк" if repo.get("fork") else "Собственный репозиторий"
+        self.inspector.setHtml(
+            f"<h3>{name}</h3><p>{description}</p><hr>"
+            f"<p><b>Тип:</b> {kind}</p><p><b>Язык:</b> {language}</p>"
+            f"<p><b>Звёзд:</b> {stars}</p><p><b>Обновлён:</b> {updated}</p>"
+        )
 
     def _bind_events(self) -> None:
         self.kernel.events.subscribe("platform.started", self._write_event)
@@ -205,7 +233,10 @@ class DevHubShell(QMainWindow):
             QLabel#KernelState { color: #86efac; font-weight: 600; }
             QListWidget#Navigation { background: #111827; color: #d1d5db; border: 0; padding: 8px; font-size: 14px; }
             QListWidget#Navigation::item { padding: 10px 12px; border-radius: 5px; }
-            QListWidget#Navigation::item:selected { background: #374151; color: white; }
+            QListWidget#Navigation::item:selected { background: #2563eb; color: white; font-weight: 700; border-left: 4px solid #93c5fd; }
+            QListWidget#Navigation::item:hover:!selected { background: #263447; color: white; }
+            QSplitter::handle { background: #dbe3ec; width: 5px; }
+            QSplitter::handle:hover { background: #93c5fd; }
             QLabel#WorkspaceTitle { font-size: 24px; font-weight: 700; }
             QLabel#WorkspaceDescription { font-size: 14px; color: #4b5563; padding-top: 8px; }
             QLabel#ArchitectureMetric { font-size: 18px; font-weight: 700; }
