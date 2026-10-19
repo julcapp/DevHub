@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+import json
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 from PySide6.QtCore import Qt, QObject, QThread, QTimer, Signal, Slot
 from PySide6.QtWidgets import (
@@ -43,6 +46,30 @@ class StarsSyncWorker(QObject):
             self.failed.emit(str(error))
 
 
+class TranslationWorker(QObject):
+    finished = Signal(str, str)
+    failed = Signal(str)
+
+    def __init__(self, description: str) -> None:
+        super().__init__()
+        self.description = description
+
+    @Slot()
+    def run(self) -> None:
+        try:
+            query = urlencode({"q": self.description[:450], "langpair": "en|ru"})
+            request = Request("https://api.mymemory.translated.net/get?" + query,
+                              headers={"User-Agent": "DevHub/0.6"})
+            with urlopen(request, timeout=12) as response:
+                result = json.load(response)
+            translated = str(result.get("responseData", {}).get("translatedText") or "").strip()
+            if not translated or int(result.get("responseStatus", 200)) != 200:
+                raise ValueError("Перевод не получен")
+            self.finished.emit(self.description, translated)
+        except Exception as error:
+            self.failed.emit(str(error))
+
+
 class StarsWorkspace(QWidget):
     """Библиотека GitHub Stars: источники для исследования, а не подключённый код."""
 
@@ -54,6 +81,9 @@ class StarsWorkspace(QWidget):
         self._sync_worker: StarsSyncWorker | None = None
         self._closing_after_sync = False
         self._selected_repository: StarredRepository | None = None
+        self._translation_cache: dict[str, str] = {}
+        self._translation_thread: QThread | None = None
+        self._translation_worker: TranslationWorker | None = None
         self._build_ui()
         self._load_local()
         if self._store is not None and not self._repositories and not self.state_label.text().startswith("Ошибка"):
@@ -109,6 +139,9 @@ class StarsWorkspace(QWidget):
         self.save_button.clicked.connect(self._save_card)
         detail_layout.addWidget(self.name_label)
         detail_layout.addWidget(self.meta_label)
+        self.translation_label = QLabel("")
+        self.translation_label.setWordWrap(True)
+        detail_layout.addWidget(self.translation_label)
         detail_layout.addWidget(QLabel("Статус исследования"))
         detail_layout.addWidget(self.status_combo)
         detail_layout.addWidget(QLabel("Заметки"))
@@ -159,9 +192,47 @@ class StarsWorkspace(QWidget):
             return
         self.name_label.setText(repo.full_name)
         meta = [value for value in (repo.language, repo.license_name, repo.url) if value]
-        self.meta_label.setText(" · ".join(meta) + ("\n" + repo.description if repo.description else ""))
+        self.meta_label.setText(" · ".join(meta) + ("\nОригинал: " + repo.description if repo.description else ""))
+        self._translate_description(repo.description)
         self.status_combo.setCurrentText(repo.status.value)
         self.notes.setPlainText(repo.notes)
+
+    def _translate_description(self, description: str) -> None:
+        if not description:
+            self.translation_label.setText("Описание на GitHub отсутствует.")
+        elif description in self._translation_cache:
+            self.translation_label.setText("По-русски: " + self._translation_cache[description])
+        elif self._translation_thread is not None:
+            self.translation_label.setText("Перевод будет доступен после выбора проекта повторно.")
+        else:
+            self.translation_label.setText("Переводим описание на русский…")
+            thread = QThread(self)
+            worker = TranslationWorker(description)
+            worker.moveToThread(thread)
+            thread.started.connect(worker.run)
+            worker.finished.connect(self._translation_done)
+            worker.failed.connect(self._translation_error)
+            worker.finished.connect(thread.quit)
+            worker.failed.connect(thread.quit)
+            thread.finished.connect(worker.deleteLater)
+            thread.finished.connect(self._translation_cleanup)
+            thread.finished.connect(thread.deleteLater)
+            self._translation_thread, self._translation_worker = thread, worker
+            thread.start()
+
+    @Slot(str, str)
+    def _translation_done(self, original: str, translated: str) -> None:
+        self._translation_cache[original] = translated
+        if self._selected_repository and self._selected_repository.description == original:
+            self.translation_label.setText("По-русски: " + translated)
+
+    @Slot(str)
+    def _translation_error(self, message: str) -> None:
+        self.translation_label.setText("Автоматический перевод недоступен. Оригинал показан выше.")
+
+    @Slot()
+    def _translation_cleanup(self) -> None:
+        self._translation_thread, self._translation_worker = None, None
 
     def _preserve_editor(self) -> None:
         if self._selected_repository is None:
@@ -240,6 +311,9 @@ class StarsWorkspace(QWidget):
             self.close()
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
+        if self._translation_thread is not None and self._translation_thread.isRunning():
+            event.ignore()
+            return
         if self._sync_thread is not None and self._sync_thread.isRunning():
             self._closing_after_sync = True
             self.state_label.setText("Ожидаем завершения синхронизации перед закрытием…")
