@@ -70,6 +70,8 @@ class DevHubShell(QMainWindow):
         self.workspace_host = QStackedWidget()
         self.inspector = QTextEdit()
         self._inspector_visible = True
+        self._inspector_user_preference = True
+        self._compact_layout = False
         self.bottom_panel = QTextEdit()
         self._workspace_factories: dict[str, Callable[[], QWidget]] = {}
         self._workspace_indexes: dict[str, int] = {}
@@ -195,7 +197,12 @@ class DevHubShell(QMainWindow):
             if title == "Проекты":
                 widget.project_selected.connect(self._show_project_in_inspector)
         self.workspace_host.setCurrentIndex(self._workspace_indexes[title])
-        if title != "Проекты":
+        if title == "Проекты":
+            widget = self.workspace_host.currentWidget()
+            row = widget.items.currentRow()
+            if row >= 0:
+                widget.show_project(row)
+        else:
             self.inspector.setPlainText("Выберите объект для просмотра его свойств.")
         self.statusBar().showMessage(f"Открыто рабочее пространство: {title}")
         self.kernel.events.publish("workspace.activated", {"workspace": title})
@@ -217,14 +224,20 @@ class DevHubShell(QMainWindow):
         )
 
     def _toggle_inspector(self) -> None:
-        self._inspector_visible = not self._inspector_visible
-        self.inspector_frame.setVisible(self._inspector_visible)
-        self.inspector_toggle.setText("Скрыть инспектор" if self._inspector_visible else "Показать инспектор")
+        self._inspector_user_preference = not self._inspector_visible
+        self._set_inspector_visible(self._inspector_user_preference)
+
+    def _set_inspector_visible(self, visible: bool) -> None:
+        self._inspector_visible = visible
+        self.inspector_frame.setVisible(visible)
+        self.inspector_toggle.setText("Скрыть инспектор" if visible else "Показать инспектор")
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
-        if self.width() < 1100 and self._inspector_visible:
-            self._toggle_inspector()
+        compact = self.width() < 1100
+        if compact != self._compact_layout:
+            self._compact_layout = compact
+            self._set_inspector_visible(False if compact else self._inspector_user_preference)
 
     def _bind_events(self) -> None:
         self.kernel.events.subscribe("platform.started", self._write_event)
