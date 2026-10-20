@@ -73,6 +73,7 @@ class DevHubShell(QMainWindow):
         self._inspector_user_preference = True
         self._compact_layout = False
         self.bottom_panel = QTextEdit()
+        self._events_visible = False
         self._workspace_factories: dict[str, Callable[[], QWidget]] = {}
         self._workspace_indexes: dict[str, int] = {}
         self._build_ui()
@@ -116,6 +117,12 @@ class DevHubShell(QMainWindow):
         self.bottom_panel.setObjectName("BottomPanel")
         self.bottom_panel.setReadOnly(True)
         self.bottom_panel.setFixedHeight(150)
+        self.bottom_panel.setVisible(False)
+        self.events_toggle = QPushButton("Показать журнал событий")
+        self.events_toggle.setObjectName("EventsToggle")
+        self.events_toggle.setToolTip("Показать или скрыть системные события")
+        self.events_toggle.clicked.connect(self._toggle_events)
+        center_layout.addWidget(self.events_toggle)
         self.bottom_panel.setPlaceholderText("История событий платформы")
         center_layout.addWidget(self.bottom_panel)
 
@@ -223,6 +230,11 @@ class DevHubShell(QMainWindow):
             f"<p><b>Звёзд:</b> {stars}</p><p><b>Обновлён:</b> {updated}</p>"
         )
 
+    def _toggle_events(self) -> None:
+        self._events_visible = not self._events_visible
+        self.bottom_panel.setVisible(self._events_visible)
+        self.events_toggle.setText("Скрыть журнал событий" if self._events_visible else "Показать журнал событий")
+
     def _toggle_inspector(self) -> None:
         self._inspector_user_preference = not self._inspector_visible
         self._set_inspector_visible(self._inspector_user_preference)
@@ -270,6 +282,8 @@ class DevHubShell(QMainWindow):
             QSplitter::handle:hover { background: #93c5fd; }
             QPushButton#InspectorToggle { background: #334155; color: #f8fafc; border: 1px solid #64748b; border-radius: 7px; padding: 8px 12px; font-weight: 600; }
             QPushButton#InspectorToggle:hover { background: #475569; }
+            QPushButton#EventsToggle { background: #e2e8f0; color: #334155; border: 1px solid #cbd5e1; text-align: left; }
+            QPushButton#EventsToggle:hover { background: #cbd5e1; }
             QPushButton { background: #2563eb; color: white; border: none; border-radius: 7px; padding: 9px 14px; font-weight: 600; }
             QPushButton:hover { background: #1d4ed8; }
             QPushButton:disabled { background: #cbd5e1; color: #64748b; }
