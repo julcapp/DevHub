@@ -124,6 +124,7 @@ class ProjectsWorkspace(QWidget):
             self._visible_projects.sort(key=lambda repo: (repo.get("full_name") or "").casefold())
         else:
             self._visible_projects.sort(key=lambda repo: int(repo.get("stargazers_count") or 0), reverse=True)
+        self.items.blockSignals(True)
         self.items.clear()
         for repo in self._visible_projects:
             self.items.addItem(f"{'[Форк]' if repo.get('fork') else '[Проект]'} {repo.get('full_name', '')} — {repo.get('description') or 'Без описания'}")
@@ -131,6 +132,9 @@ class ProjectsWorkspace(QWidget):
         if self._visible_projects:
             target = next((i for i, repo in enumerate(self._visible_projects) if repo.get('full_name') == selected), 0)
             self.items.setCurrentRow(target)
+        self.items.blockSignals(False)
+        if self._visible_projects:
+            self.show_project(self.items.currentRow())
         else:
             self.details.clear()
             self.project_selected.emit(None)
