@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from html import escape
+from PySide6.QtCore import Qt
 
 from PySide6.QtWidgets import (
     QFrame,
+    QPushButton,
     QHBoxLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QSplitter,
     QStackedWidget,
     QStatusBar,
     QTextEdit,
@@ -65,7 +69,11 @@ class DevHubShell(QMainWindow):
         self.navigation = QListWidget()
         self.workspace_host = QStackedWidget()
         self.inspector = QTextEdit()
+        self._inspector_visible = True
+        self._inspector_user_preference = True
+        self._compact_layout = False
         self.bottom_panel = QTextEdit()
+        self._events_visible = False
         self._workspace_factories: dict[str, Callable[[], QWidget]] = {}
         self._workspace_indexes: dict[str, int] = {}
         self._build_ui()
@@ -88,6 +96,7 @@ class DevHubShell(QMainWindow):
         subtitle.setObjectName("ProductSubtitle")
         title_layout.addWidget(title)
         title_layout.addWidget(subtitle)
+        title_bar.setStyleSheet("QFrame#TitleBar { background-color: #1f2937; } QLabel#ProductTitle { background: transparent; color: #ffffff; } QLabel#ProductSubtitle { background: transparent; color: #cbd5e1; } QLabel#KernelState { background: transparent; color: #86efac; }")
         title_layout.addStretch()
         kernel_state = QLabel("● Ядро: готово")
         kernel_state.setObjectName("KernelState")
@@ -97,7 +106,8 @@ class DevHubShell(QMainWindow):
         body.setContentsMargins(0, 0, 0, 0)
         body.setSpacing(0)
         self.navigation.setObjectName("Navigation")
-        self.navigation.setFixedWidth(245)
+        self.navigation.setMinimumWidth(175)
+        self.navigation.setMaximumWidth(320)
         self.navigation.currentItemChanged.connect(self._activate_workspace)
 
         center = QWidget()
@@ -107,12 +117,20 @@ class DevHubShell(QMainWindow):
         self.bottom_panel.setObjectName("BottomPanel")
         self.bottom_panel.setReadOnly(True)
         self.bottom_panel.setFixedHeight(150)
+        self.bottom_panel.setVisible(False)
+        self.events_toggle = QPushButton("Показать журнал событий")
+        self.events_toggle.setObjectName("EventsToggle")
+        self.events_toggle.setToolTip("Показать или скрыть системные события")
+        self.events_toggle.clicked.connect(self._toggle_events)
+        center_layout.addWidget(self.events_toggle)
         self.bottom_panel.setPlaceholderText("История событий платформы")
         center_layout.addWidget(self.bottom_panel)
 
         inspector_frame = QFrame()
+        self.inspector_frame = inspector_frame
         inspector_frame.setObjectName("InspectorFrame")
-        inspector_frame.setFixedWidth(300)
+        inspector_frame.setMinimumWidth(215)
+        inspector_frame.setMaximumWidth(430)
         inspector_layout = QVBoxLayout(inspector_frame)
         inspector_title = QLabel("Инспектор")
         inspector_title.setObjectName("PanelTitle")
@@ -124,11 +142,19 @@ class DevHubShell(QMainWindow):
         inspector_layout.addWidget(inspector_title)
         inspector_layout.addWidget(self.inspector)
 
-        body.addWidget(self.navigation)
-        body.addWidget(center, 1)
-        body.addWidget(inspector_frame)
+        self.content_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.content_splitter.setChildrenCollapsible(False)
+        for widget in (self.navigation, center, inspector_frame):
+            self.content_splitter.addWidget(widget)
+        self.content_splitter.setStretchFactor(1, 1)
+        self.content_splitter.setSizes([220, 980, 270])
+        self.inspector_toggle = QPushButton("Скрыть инспектор")
+        self.inspector_toggle.setToolTip("Освободить место для рабочего пространства")
+        self.inspector_toggle.setObjectName("InspectorToggle")
+        self.inspector_toggle.clicked.connect(self._toggle_inspector)
+        title_layout.addWidget(self.inspector_toggle)
         root_layout.addWidget(title_bar)
-        root_layout.addLayout(body, 1)
+        root_layout.addWidget(self.content_splitter, 1)
         self.setCentralWidget(root)
         self.setStatusBar(QStatusBar())
         self.statusBar().showMessage("DevHub готов к работе")
@@ -137,9 +163,10 @@ class DevHubShell(QMainWindow):
     def _register_workspaces(self) -> None:
         entries = [
             ("Обзор", lambda: DashboardWorkspace()),
-            ("Проекты", lambda: PlaceholderWorkspace("Проекты", "Реестр инженерных проектов и их цифровых двойников.")),
+            ("Проекты", self._create_projects_workspace),
             ("Проводник", lambda: ProjectExplorerWorkspace()),
             ("Знания", lambda: PlaceholderWorkspace("Знания", "Инженерные активы, связи и корпоративная память.")),
+            ("Звёздочки", self._create_stars_workspace),
             ("Идеи", lambda: EngineeringNotebookWorkspace()),
             ("Исследования", lambda: PlaceholderWorkspace("Исследования", "Гипотезы, эксперименты, выводы и доказательства.")),
             ("Архитектура", lambda: ArchitectureWorkspace()),
@@ -156,6 +183,17 @@ class DevHubShell(QMainWindow):
             self._workspace_factories[title] = factory
             self.navigation.addItem(QListWidgetItem(title))
 
+    @staticmethod
+    def _create_projects_workspace() -> QWidget:
+        from app.workspaces.projects_workspace import ProjectsWorkspace
+        return ProjectsWorkspace()
+
+    @staticmethod
+    def _create_stars_workspace() -> QWidget:
+        from app.workspaces.stars import StarsWorkspace
+
+        return StarsWorkspace()
+
     def _activate_workspace(self, current: QListWidgetItem | None, _: QListWidgetItem | None) -> None:
         if current is None:
             return
@@ -163,9 +201,55 @@ class DevHubShell(QMainWindow):
         if title not in self._workspace_indexes:
             widget = self._workspace_factories[title]()
             self._workspace_indexes[title] = self.workspace_host.addWidget(widget)
+            if title == "Проекты":
+                widget.project_selected.connect(self._show_project_in_inspector)
         self.workspace_host.setCurrentIndex(self._workspace_indexes[title])
+        if title == "Проекты":
+            widget = self.workspace_host.currentWidget()
+            row = widget.items.currentRow()
+            if row >= 0:
+                widget.show_project(row)
+        else:
+            self.inspector.setPlainText("Выберите объект для просмотра его свойств.")
         self.statusBar().showMessage(f"Открыто рабочее пространство: {title}")
         self.kernel.events.publish("workspace.activated", {"workspace": title})
+
+    def _show_project_in_inspector(self, repo: object) -> None:
+        if not isinstance(repo, dict):
+            self.inspector.setPlainText("Выберите проект в списке.")
+            return
+        name = escape(str(repo.get("full_name") or "Без названия"))
+        description = escape(str(repo.get("description") or "Описание не указано"))
+        language = escape(str(repo.get("language") or "Не указан"))
+        updated = escape(str(repo.get("updated_at") or "Неизвестно")[:10])
+        stars = int(repo.get("stargazers_count") or 0)
+        kind = "Форк" if repo.get("fork") else "Собственный репозиторий"
+        self.inspector.setHtml(
+            f"<h3>{name}</h3><p>{description}</p><hr>"
+            f"<p><b>Тип:</b> {kind}</p><p><b>Язык:</b> {language}</p>"
+            f"<p><b>Звёзд:</b> {stars}</p><p><b>Обновлён:</b> {updated}</p>"
+        )
+
+    def _toggle_events(self) -> None:
+        self._events_visible = not self._events_visible
+        self.bottom_panel.setVisible(self._events_visible)
+        self.events_toggle.setText("Скрыть журнал событий" if self._events_visible else "Показать журнал событий")
+
+    def _toggle_inspector(self) -> None:
+        self._inspector_user_preference = not self._inspector_visible
+        self._set_inspector_visible(self._inspector_user_preference)
+
+    def _set_inspector_visible(self, visible: bool) -> None:
+        self._inspector_visible = visible
+        self.inspector_frame.setVisible(visible)
+        self.inspector_toggle.setText("Скрыть инспектор" if visible else "Показать инспектор")
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        compact = self.width() < 1100
+        if compact != self._compact_layout:
+            self._compact_layout = compact
+            self._set_inspector_visible(False if compact else self._inspector_user_preference)
 
     def _bind_events(self) -> None:
         self.kernel.events.subscribe("platform.started", self._write_event)
@@ -192,7 +276,21 @@ class DevHubShell(QMainWindow):
             QLabel#KernelState { color: #86efac; font-weight: 600; }
             QListWidget#Navigation { background: #111827; color: #d1d5db; border: 0; padding: 8px; font-size: 14px; }
             QListWidget#Navigation::item { padding: 10px 12px; border-radius: 5px; }
-            QListWidget#Navigation::item:selected { background: #374151; color: white; }
+            QListWidget#Navigation::item:selected { background: #2563eb; color: white; font-weight: 700; border-left: 4px solid #93c5fd; }
+            QListWidget#Navigation::item:hover:!selected { background: #263447; color: white; }
+            QSplitter::handle { background: #dbe3ec; width: 5px; }
+            QSplitter::handle:hover { background: #93c5fd; }
+            QPushButton#InspectorToggle { background: #334155; color: #f8fafc; border: 1px solid #64748b; border-radius: 7px; padding: 8px 12px; font-weight: 600; }
+            QPushButton#InspectorToggle:hover { background: #475569; }
+            QPushButton#EventsToggle { background: #e2e8f0; color: #334155; border: 1px solid #cbd5e1; text-align: left; }
+            QPushButton#EventsToggle:hover { background: #cbd5e1; }
+            QPushButton { background: #2563eb; color: white; border: none; border-radius: 7px; padding: 9px 14px; font-weight: 600; }
+            QPushButton:hover { background: #1d4ed8; }
+            QPushButton:disabled { background: #cbd5e1; color: #64748b; }
+            QLineEdit, QComboBox { min-height: 30px; border: 1px solid #cbd5e1; border-radius: 7px; padding: 5px 9px; background: white; }
+            QLineEdit:focus, QComboBox:focus { border: 2px solid #3b82f6; }
+            QListWidget::item:selected { background: #dbeafe; color: #1e3a8a; }
+            QListWidget#Navigation::item:selected { background: #2563eb; color: white; font-weight: 700; border-left: 4px solid #93c5fd; }
             QLabel#WorkspaceTitle { font-size: 24px; font-weight: 700; }
             QLabel#WorkspaceDescription { font-size: 14px; color: #4b5563; padding-top: 8px; }
             QLabel#ArchitectureMetric { font-size: 18px; font-weight: 700; }
