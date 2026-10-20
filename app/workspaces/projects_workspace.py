@@ -123,9 +123,11 @@ class ProjectsWorkspace(QWidget):
             self.items.addItem(f"{'[Форк]' if repo.get('fork') else '[Проект]'} {repo.get('full_name', '')} — {repo.get('description') or 'Без описания'}")
         self.status.setText(f"Показано {len(self._visible_projects)} из {len(self._projects)} публичных репозиториев.")
         if self._visible_projects:
-            self.items.setCurrentRow(0)
+            target = next((i for i, repo in enumerate(self._visible_projects) if repo.get('full_name') == selected), 0)
+            self.items.setCurrentRow(target)
         else:
             self.details.clear()
+            self.project_selected.emit(None)
 
     @Slot(int)
     def show_project(self, row: int) -> None:
