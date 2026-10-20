@@ -64,3 +64,29 @@ def test_project_sorting_by_stars_and_name(monkeypatch):
     workspace.sort_filter.setCurrentIndex(0)
     assert "zeta" in workspace.items.item(0).text()
     workspace.close()
+
+
+def test_selection_survives_sort_and_filter(monkeypatch):
+    monkeypatch.setattr(ProjectsWorkspace, "reload", lambda self: None)
+    app = QApplication.instance() or QApplication([])
+    workspace = ProjectsWorkspace()
+    workspace.loaded([
+        {"full_name": "julcapp/alpha", "language": "Python", "stargazers_count": 30},
+        {"full_name": "julcapp/beta", "language": "Python", "stargazers_count": 10},
+        {"full_name": "julcapp/gamma", "language": "Rust", "stargazers_count": 20},
+    ])
+    workspace.items.setCurrentRow(1)
+    assert workspace._visible_projects[workspace.items.currentRow()]["full_name"] == "julcapp/beta"
+
+    workspace.sort_filter.setCurrentIndex(2)
+    assert workspace._visible_projects[workspace.items.currentRow()]["full_name"] == "julcapp/beta"
+
+    workspace.search.setText("python")
+    assert workspace._visible_projects[workspace.items.currentRow()]["full_name"] == "julcapp/beta"
+
+    workspace.search.setText("rust")
+    assert workspace._visible_projects[workspace.items.currentRow()]["full_name"] == "julcapp/gamma"
+
+    workspace.search.setText("nothing")
+    assert workspace.items.currentRow() == -1
+    workspace.close()
