@@ -104,6 +104,12 @@ class ProjectsWorkspace(QWidget):
 
     @Slot()
     def filter_projects(self) -> None:
+        current_row = self.items.currentRow()
+        selected = (
+            self._visible_projects[current_row].get("full_name")
+            if 0 <= current_row < len(self._visible_projects)
+            else None
+        )
         query = self.search.text().strip().casefold()
         kind = self.kind_filter.currentIndex()
         self._visible_projects = [
