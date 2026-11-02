@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
+import subprocess
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -37,6 +39,9 @@ class EngineeringNotebookWorkspace(QWidget):
         self.editor = QPlainTextEdit()
         self.editor.setPlaceholderText("Выберите или создайте документ")
         self.save_button = QPushButton("Сохранить")
+        self.dictation_button = QPushButton("🎙 Диктовать через Handy")
+        self.dictation_button.setToolTip("Начать или остановить запись в установленном Handy. Текст вставляется в редактор автоматически.")
+        self.dictation_button.clicked.connect(self.toggle_dictation)
         self.delete_button = QPushButton("Удалить")
         self._build_ui()
         self._populate_categories()
@@ -81,6 +86,7 @@ class EngineeringNotebookWorkspace(QWidget):
         editor_layout.addWidget(self.editor, 1)
         editor_actions = QHBoxLayout()
         editor_actions.addStretch()
+        editor_actions.addWidget(self.dictation_button)
         editor_actions.addWidget(self.delete_button)
         editor_actions.addWidget(self.save_button)
         editor_layout.addLayout(editor_actions)
@@ -92,6 +98,24 @@ class EngineeringNotebookWorkspace(QWidget):
 
         layout.addLayout(header)
         layout.addWidget(splitter, 1)
+
+    def toggle_dictation(self) -> None:
+        """Trigger the separately installed Handy application; never capture audio in DevHub."""
+        command = shutil.which("handy")
+        if command is None:
+            QMessageBox.information(
+                self,
+                "Голосовые заметки",
+                "Handy не найден в PATH. Установите его с https://github.com/cjpais/Handy/releases, "
+                "запустите, настройте микрофон и модель, затем повторите. "
+                "Также можно диктовать глобальным сочетанием клавиш Handy прямо в редактор.",
+            )
+            return
+        self.editor.setFocus()
+        try:
+            subprocess.Popen([command, "--toggle-transcription"], close_fds=True)
+        except OSError as error:
+            QMessageBox.warning(self, "Голосовые заметки", f"Не удалось запустить Handy: {error}")
 
     def _populate_categories(self) -> None:
         self.categories.clear()
@@ -202,3 +226,4 @@ class EngineeringNotebookWorkspace(QWidget):
         self.editor.setEnabled(enabled)
         self.save_button.setEnabled(enabled)
         self.delete_button.setEnabled(enabled)
+        self.dictation_button.setEnabled(enabled)
