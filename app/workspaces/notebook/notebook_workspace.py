@@ -52,7 +52,7 @@ class EngineeringNotebookWorkspace(QWidget):
         self.delete_button = QPushButton("Удалить")
         self._build_ui()
         self._populate_categories()
-        self.categories.currentTextChanged.connect(self._reload_documents)
+        self.categories.currentTextChanged.connect(self._change_category)
         self.documents.itemSelectionChanged.connect(self._open_selected_document)
         self.save_button.clicked.connect(self.save_current_document)
         self.editor.textChanged.connect(self._schedule_autosave)
@@ -225,6 +225,7 @@ class EngineeringNotebookWorkspace(QWidget):
         return True
 
     def delete_current_document(self) -> None:
+        self._autosave_timer.stop()
         if self.current_document is None:
             return
         answer = QMessageBox.question(
@@ -240,8 +241,18 @@ class EngineeringNotebookWorkspace(QWidget):
             QMessageBox.warning(self, "Engineering Notebook", str(error))
             return
         self.current_document = None
+        self._saved_content = ""
         self.editor.clear()
         self._reload_documents(self.categories.currentItem().text() if self.categories.currentItem() else "Идеи")
+        self._update_controls()
+
+    def _change_category(self, category: str) -> None:
+        if not self._flush_pending_changes():
+            return
+        self.current_document = None
+        self._saved_content = ""
+        self.editor.clear()
+        self._reload_documents(category)
         self._update_controls()
 
     def _reload_documents(self, category: str) -> None:
