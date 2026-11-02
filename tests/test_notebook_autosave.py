@@ -33,3 +33,22 @@ def test_notebook_autosave_after_edit(tmp_path):
     assert "Текст диктовки" in document.path.read_text(encoding="utf-8")
     assert workspace.save_status.text() == "Все изменения сохранены"
     workspace.close()
+
+
+def test_autosave_preserves_cursor_and_document_selection(tmp_path):
+    app = QApplication.instance() or QApplication([])
+    workspace = EngineeringNotebookWorkspace()
+    workspace.set_project(tmp_path)
+    document = workspace.controller.create_document("Идеи", "Позиция курсора")
+    workspace._reload_documents("Идеи")
+    workspace._select_document(document.path)
+    workspace.editor.setPlainText("Начало текста")
+    cursor = workspace.editor.textCursor()
+    cursor.setPosition(3)
+    workspace.editor.setTextCursor(cursor)
+    selected = workspace.documents.currentItem()
+    workspace._autosave_document()
+    assert workspace.editor.textCursor().position() == 3
+    assert workspace.documents.currentItem() is selected
+    assert workspace.current_document == document.path
+    workspace.close()
