@@ -52,3 +52,50 @@ def test_autosave_preserves_cursor_and_document_selection(tmp_path):
     assert workspace.documents.currentItem() is selected
     assert workspace.current_document == document.path
     workspace.close()
+
+
+def test_voice_recording_starts_transcription_without_counter_crash(tmp_path, monkeypatch):
+    from app.workspaces.notebook.microphone import MicrophoneRecorder
+    from app.workspaces.notebook import notebook_workspace
+
+    app = QApplication.instance() or QApplication([])
+    workspace = EngineeringNotebookWorkspace()
+    workspace.set_project(tmp_path)
+    document = workspace.controller.create_document("Идеи", "Диктовка")
+    workspace._reload_documents("Идеи")
+    workspace._select_document(document.path)
+
+    class FakeRecorder:
+        def start(self):
+            pass
+
+        def stop(self):
+            audio = tmp_path / "voice.wav"
+            audio.write_bytes(b"fake")
+            return audio
+
+        def cancel(self):
+            pass
+
+    class FakeWorker:
+        def __init__(self, path):
+            self.path = path
+            self.completed = type("Signal", (), {"connect": lambda self, cb: None})()
+            self.failed = type("Signal", (), {"connect": lambda self, cb: None})()
+            self.finished = type("Signal", (), {"connect": lambda self, cb: None})()
+
+        def start(self):
+            pass
+
+        def isRunning(self):
+            return False
+
+    monkeypatch.setattr(notebook_workspace, "TranscriptionWorker", FakeWorker)
+    monkeypatch.setattr(MicrophoneRecorder, "start", lambda self: None)
+    monkeypatch.setattr(MicrophoneRecorder, "stop", lambda self: tmp_path / "voice.wav")
+    workspace.toggle_local_recording()
+    workspace.toggle_local_recording()
+    assert workspace._transcription_document == document.path
+    assert workspace._transcription_worker is not None
+    workspace._transcription_worker = None
+    workspace.close()
