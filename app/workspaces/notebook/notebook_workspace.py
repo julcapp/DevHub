@@ -5,7 +5,7 @@ import os
 import shutil
 import subprocess
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QThread, Signal
 from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
@@ -27,12 +27,35 @@ from app.workspaces.notebook.controller import (
 )
 
 
+class TranscriptionWorker(QThread):
+    completed = Signal(str)
+    failed = Signal(str)
+
+    def __init__(self, audio_path: Path) -> None:
+        super().__init__()
+        self.audio_path = audio_path
+
+    def run(self) -> None:
+        try:
+            from app.workspaces.notebook.offline_speech import (
+                OfflineSpeechRecognizer, default_model_dir,
+            )
+            text = OfflineSpeechRecognizer(default_model_dir()).transcribe_file(self.audio_path)
+            self.completed.emit(text)
+        except Exception as error:
+            self.failed.emit(str(error))
+        finally:
+            self.audio_path.unlink(missing_ok=True)
+
+
 class EngineeringNotebookWorkspace(QWidget):
     """Инженерный журнал проекта: идеи, ADR, решения, задачи и исследования."""
 
     def __init__(self) -> None:
         super().__init__()
         self.controller = EngineeringNotebookController()
+        self._recorder = None
+        self._transcription_worker = None
         self.current_document: Path | None = None
         self._loading_document = False
         self._saved_content = ""
@@ -46,7 +69,9 @@ class EngineeringNotebookWorkspace(QWidget):
         self.editor = QPlainTextEdit()
         self.editor.setPlaceholderText("Выберите или создайте документ")
         self.save_button = QPushButton("Сохранить")
-        self.dictation_button = QPushButton("🎙 Диктовать через Handy")
+        self.record_button = QPushButton("🎤 Записать заметку")
+        self.record_button.clicked.connect(self.toggle_local_recording)
+        self.dictation_button = QPushButton("🎙 Handy")
         self.dictation_button.setToolTip("Начать или остановить запись в установленном Handy. Текст вставляется в редактор автоматически.")
         self.dictation_button.clicked.connect(self.toggle_dictation)
         self.delete_button = QPushButton("Удалить")
@@ -96,6 +121,7 @@ class EngineeringNotebookWorkspace(QWidget):
         editor_layout.addWidget(self.save_status)
         editor_actions = QHBoxLayout()
         editor_actions.addStretch()
+        editor_actions.addWidget(self.record_button)
         editor_actions.addWidget(self.dictation_button)
         editor_actions.addWidget(self.delete_button)
         editor_actions.addWidget(self.save_button)
@@ -108,6 +134,52 @@ class EngineeringNotebookWorkspace(QWidget):
 
         layout.addLayout(header)
         layout.addWidget(splitter, 1)
+
+    def toggle_local_recording(self) -> None:
+        from app.workspaces.notebook.microphone import MicrophoneRecorder
+        if self._recorder is None:
+            recorder = MicrophoneRecorder()
+            try:
+                recorder.start()
+            except Exception as error:
+                QMessageBox.warning(self, "Голосовые заметки", str(error))
+                return
+            self._recorder = recorder
+            self.record_button.setText("⏹ Остановить запись")
+            self.save_status.setText("Идёт запись с микрофона…")
+            return
+        recorder = self._recorder
+        self._recorder = None
+        self.record_button.setText("🎤 Записать заметку")
+        try:
+            path = recorder.stop()
+        except Exception as error:
+            QMessageBox.warning(self, "Голосовые заметки", str(error))
+            return
+        self.record_button.setEnabled(False)
+        self.save_status.setText("Распознавание речи…")
+        worker = TranscriptionWorker(path)
+        self._transcription_worker = worker
+        worker.completed.connect(self._insert_transcription)
+        worker.failed.connect(self._transcription_failed)
+        worker.finished.connect(self._transcription_finished)
+        worker.start()
+
+    def _insert_transcription(self, text: str) -> None:
+        if self.current_document is None:
+            return
+        if text:
+            cursor = self.editor.textCursor()
+            cursor.movePosition(cursor.MoveOperation.End)
+            cursor.insertText("\\n" + text + "\\n")
+            self.editor.setTextCursor(cursor)
+
+    def _transcription_failed(self, message: str) -> None:
+        QMessageBox.warning(self, "Голосовые заметки", message)
+
+    def _transcription_finished(self) -> None:
+        self._transcription_worker = None
+        self._update_controls()
 
     def toggle_dictation(self) -> None:
         """Trigger the separately installed Handy application; never capture audio in DevHub."""
@@ -301,8 +373,15 @@ class EngineeringNotebookWorkspace(QWidget):
         self.save_button.setEnabled(enabled)
         self.delete_button.setEnabled(enabled)
         self.dictation_button.setEnabled(enabled)
+        self.record_button.setEnabled(enabled and self._transcription_worker is None)
 
     def closeEvent(self, event) -> None:
+        if self._recorder is not None:
+            self._recorder.cancel()
+            self._recorder = None
+        if self._transcription_worker is not None and self._transcription_worker.isRunning():
+            event.ignore()
+            return
         if not self._flush_pending_changes():
             event.ignore()
             return
