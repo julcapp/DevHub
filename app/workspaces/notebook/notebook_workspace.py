@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
 import shutil
 import subprocess
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
@@ -33,6 +34,12 @@ class EngineeringNotebookWorkspace(QWidget):
         super().__init__()
         self.controller = EngineeringNotebookController()
         self.current_document: Path | None = None
+        self._loading_document = False
+        self._saved_content = ""
+        self._autosave_timer = QTimer(self)
+        self._autosave_timer.setSingleShot(True)
+        self._autosave_timer.setInterval(1200)
+        self._autosave_timer.timeout.connect(self._autosave_document)
         self.project_label = QLabel("Проект не выбран")
         self.categories = QListWidget()
         self.documents = QListWidget()
@@ -48,6 +55,7 @@ class EngineeringNotebookWorkspace(QWidget):
         self.categories.currentTextChanged.connect(self._reload_documents)
         self.documents.itemSelectionChanged.connect(self._open_selected_document)
         self.save_button.clicked.connect(self.save_current_document)
+        self.editor.textChanged.connect(self._schedule_autosave)
         self.delete_button.clicked.connect(self.delete_current_document)
         self._update_controls()
 
@@ -84,6 +92,8 @@ class EngineeringNotebookWorkspace(QWidget):
         editor_layout.setContentsMargins(0, 0, 0, 0)
         editor_layout.addWidget(QLabel("Редактор Markdown"))
         editor_layout.addWidget(self.editor, 1)
+        self.save_status = QLabel("Все изменения сохраняются автоматически")
+        editor_layout.addWidget(self.save_status)
         editor_actions = QHBoxLayout()
         editor_actions.addStretch()
         editor_actions.addWidget(self.dictation_button)
@@ -101,7 +111,7 @@ class EngineeringNotebookWorkspace(QWidget):
 
     def toggle_dictation(self) -> None:
         """Trigger the separately installed Handy application; never capture audio in DevHub."""
-        command = shutil.which("handy")
+        command = self._find_handy()
         if command is None:
             QMessageBox.information(
                 self,
@@ -117,6 +127,42 @@ class EngineeringNotebookWorkspace(QWidget):
         except OSError as error:
             QMessageBox.warning(self, "Голосовые заметки", f"Не удалось запустить Handy: {error}")
 
+    @staticmethod
+    def _find_handy() -> str | None:
+        command = shutil.which("handy") or shutil.which("Handy.exe")
+        if command:
+            return command
+        if os.name == "nt":
+            candidates = [
+                Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Handy" / "Handy.exe",
+                Path(os.environ.get("LOCALAPPDATA", "")) / "Handy" / "Handy.exe",
+                Path(os.environ.get("PROGRAMFILES", "")) / "Handy" / "Handy.exe",
+            ]
+            for candidate in candidates:
+                if candidate.is_file():
+                    return str(candidate)
+        return None
+
+    def _schedule_autosave(self) -> None:
+        if self._loading_document or self.current_document is None:
+            return
+        if self.editor.toPlainText() != self._saved_content:
+            self.save_status.setText("Есть несохранённые изменения…")
+            self._autosave_timer.start()
+        else:
+            self._autosave_timer.stop()
+            self.save_status.setText("Все изменения сохранены")
+
+    def _autosave_document(self) -> None:
+        if self.current_document is not None and self.editor.toPlainText() != self._saved_content:
+            self.save_current_document()
+
+    def _flush_pending_changes(self) -> bool:
+        self._autosave_timer.stop()
+        if self.current_document is None or self.editor.toPlainText() == self._saved_content:
+            return True
+        return self.save_current_document()
+
     def _populate_categories(self) -> None:
         self.categories.clear()
         for title in NOTEBOOK_CATEGORIES:
@@ -124,11 +170,15 @@ class EngineeringNotebookWorkspace(QWidget):
         self.categories.setCurrentRow(0)
 
     def choose_project(self) -> None:
+        if not self._flush_pending_changes():
+            return
         directory = QFileDialog.getExistingDirectory(self, "Выберите папку проекта")
         if directory:
             self.set_project(Path(directory))
 
     def set_project(self, project_root: Path) -> None:
+        if not self._flush_pending_changes():
+            return
         try:
             self.controller.set_project(project_root)
         except ValueError as error:
@@ -136,11 +186,14 @@ class EngineeringNotebookWorkspace(QWidget):
             return
         self.project_label.setText(str(project_root.resolve()))
         self.current_document = None
+        self._saved_content = ""
         self.editor.clear()
         self._reload_documents(self.categories.currentItem().text() if self.categories.currentItem() else "Идеи")
         self._update_controls()
 
     def create_document(self) -> None:
+        if not self._flush_pending_changes():
+            return
         if self.controller.project_root is None:
             QMessageBox.information(self, "Engineering Notebook", "Сначала выберите проект")
             return
@@ -156,16 +209,20 @@ class EngineeringNotebookWorkspace(QWidget):
         self._reload_documents(category)
         self._select_document(document.path)
 
-    def save_current_document(self) -> None:
+    def save_current_document(self) -> bool:
         if self.current_document is None:
-            return
+            return True
         try:
             self.controller.save_document(self.current_document, self.editor.toPlainText())
         except (ValueError, OSError) as error:
             QMessageBox.warning(self, "Engineering Notebook", str(error))
-            return
+            self.save_status.setText("Не удалось сохранить изменения")
+            return False
+        self._saved_content = self.editor.toPlainText()
+        self.save_status.setText("Все изменения сохранены")
         self._reload_documents(self.categories.currentItem().text() if self.categories.currentItem() else "Идеи")
         self._select_document(self.current_document)
+        return True
 
     def delete_current_document(self) -> None:
         if self.current_document is None:
@@ -201,6 +258,8 @@ class EngineeringNotebookWorkspace(QWidget):
             self.documents.addItem(item)
 
     def _open_selected_document(self) -> None:
+        if not self._flush_pending_changes():
+            return
         item = self.documents.currentItem()
         if item is None:
             return
@@ -210,8 +269,12 @@ class EngineeringNotebookWorkspace(QWidget):
         except (ValueError, OSError) as error:
             QMessageBox.warning(self, "Engineering Notebook", str(error))
             return
+        self._loading_document = True
         self.current_document = document.path
+        self._saved_content = document.content
         self.editor.setPlainText(document.content)
+        self._loading_document = False
+        self.save_status.setText("Все изменения сохранены")
         self._update_controls()
 
     def _select_document(self, path: Path) -> None:
@@ -227,3 +290,9 @@ class EngineeringNotebookWorkspace(QWidget):
         self.save_button.setEnabled(enabled)
         self.delete_button.setEnabled(enabled)
         self.dictation_button.setEnabled(enabled)
+
+    def closeEvent(self, event) -> None:
+        if not self._flush_pending_changes():
+            event.ignore()
+            return
+        super().closeEvent(event)
