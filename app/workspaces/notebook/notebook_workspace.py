@@ -173,7 +173,7 @@ class EngineeringNotebookWorkspace(QWidget):
         if text:
             cursor = self.editor.textCursor()
             cursor.movePosition(cursor.MoveOperation.End)
-            cursor.insertText("\\n" + text + "\\n")
+            cursor.insertText("\n" + text + "\n")
             self.editor.setTextCursor(cursor)
 
     def _transcription_failed(self, message: str) -> None:
