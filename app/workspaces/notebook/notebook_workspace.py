@@ -56,6 +56,7 @@ class EngineeringNotebookWorkspace(QWidget):
         self.controller = EngineeringNotebookController()
         self._recorder = None
         self._transcription_worker = None
+        self._transcription_document = None
         self.current_document: Path | None = None
         self._loading_document = False
         self._saved_content = ""
@@ -157,6 +158,7 @@ class EngineeringNotebookWorkspace(QWidget):
             QMessageBox.warning(self, "Голосовые заметки", str(error))
             return
         self.record_button.setEnabled(False)
+        self._transcription_document = self.current_document
         self.save_status.setText("Распознавание речи…")
         worker = TranscriptionWorker(path)
         self._transcription_worker = worker
@@ -166,7 +168,7 @@ class EngineeringNotebookWorkspace(QWidget):
         worker.start()
 
     def _insert_transcription(self, text: str) -> None:
-        if self.current_document is None:
+        if self.current_document is None or self.current_document != self._transcription_document:
             return
         if text:
             cursor = self.editor.textCursor()
@@ -179,6 +181,7 @@ class EngineeringNotebookWorkspace(QWidget):
 
     def _transcription_finished(self) -> None:
         self._transcription_worker = None
+        self._transcription_document = None
         self._update_controls()
 
     def toggle_dictation(self) -> None:
