@@ -57,6 +57,7 @@ class EngineeringNotebookWorkspace(QWidget):
         self._recorder = None
         self._transcription_worker = None
         self._transcription_document = None
+        self._transcription_generation = 0
         self.current_document: Path | None = None
         self._loading_document = False
         self._saved_content = ""
@@ -159,6 +160,7 @@ class EngineeringNotebookWorkspace(QWidget):
             return
         self.record_button.setEnabled(False)
         self._transcription_document = self.current_document
+        self._transcription_generation += 1
         self.save_status.setText("Распознавание речи…")
         worker = TranscriptionWorker(path)
         self._transcription_worker = worker
