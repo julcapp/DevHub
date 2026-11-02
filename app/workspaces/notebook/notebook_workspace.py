@@ -57,7 +57,6 @@ class EngineeringNotebookWorkspace(QWidget):
         self._recorder = None
         self._transcription_worker = None
         self._transcription_document = None
-        self._transcription_generation = 0
         self.current_document: Path | None = None
         self._loading_document = False
         self._saved_content = ""
@@ -297,8 +296,8 @@ class EngineeringNotebookWorkspace(QWidget):
             return False
         self._saved_content = self.editor.toPlainText()
         self.save_status.setText("Все изменения сохранены")
-        self._reload_documents(self.categories.currentItem().text() if self.categories.currentItem() else "Идеи")
-        self._select_document(self.current_document)
+        # Saving content must not reload the editor: that would reset the cursor
+        # and can trigger reentrant selection/flush signals during autosave.
         return True
 
     def delete_current_document(self) -> None:
