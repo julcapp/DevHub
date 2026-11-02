@@ -1,0 +1,5 @@
+# Optional local speech recognition dependencies for development.
+# Do not install in base DevHub until packaging and CPU compatibility are verified.
+faster-whisper>=1.1,<2
+sounddevice>=0.5,<1
+numpy>=1.26,<3
