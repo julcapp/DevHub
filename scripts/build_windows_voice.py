@@ -25,7 +25,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-dir", type=Path, required=True,
                         help="Existing local CTranslate2 multilingual Whisper model directory")
-    parser.add_argument("--entry", type=Path, default=ROOT / "main.py")
+    parser.add_argument("--entry", type=Path, default=ROOT / "run.py")
     args = parser.parse_args()
     if platform.system() != "Windows" or platform.machine().lower() not in {"amd64", "x86_64"}:
         raise SystemExit("Build must run on Windows x64")
