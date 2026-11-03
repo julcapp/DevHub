@@ -13,6 +13,7 @@ class MicrophoneRecorder:
         self._frames: list[bytes] = []
         self._capture_error: str | None = None
         self._max_frames = sample_rate * 120
+        self._captured_bytes = 0
 
     @property
     def recording(self) -> bool:
@@ -27,14 +28,16 @@ class MicrophoneRecorder:
             raise RuntimeError("Не установлен модуль sounddevice") from exc
         self._frames = []
         self._capture_error = None
+        self._captured_bytes = 0
 
         def on_audio(indata, frames, time_info, status):
             if status:
                 self._capture_error = str(status)
-            if sum(len(chunk) for chunk in self._frames) + indata.nbytes > self._max_frames * 2:
+            if self._captured_bytes + indata.nbytes > self._max_frames * 2:
                 self._capture_error = "Превышен лимит записи 120 секунд"
                 raise sd.CallbackStop
             self._frames.append(indata.copy().tobytes())
+            self._captured_bytes += indata.nbytes
 
         stream = sd.InputStream(samplerate=self.sample_rate, channels=1,
                                 dtype="int16", callback=on_audio)
@@ -54,6 +57,7 @@ class MicrophoneRecorder:
         stream.close()
         if self._capture_error:
             self._frames = []
+            self._captured_bytes = 0
             raise RuntimeError(f"Ошибка записи: {self._capture_error}")
         if not self._frames:
             raise RuntimeError("Микрофон не записал звук")
@@ -72,6 +76,7 @@ class MicrophoneRecorder:
             raise
         finally:
             self._frames = []
+            self._captured_bytes = 0
         return path
 
     def cancel(self) -> None:
