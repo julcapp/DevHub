@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import os
+import sys
 
 
 class OfflineSpeechRecognizer:
@@ -40,4 +41,4 @@ def default_model_dir() -> Path:
     configured = os.environ.get("DEVHUB_WHISPER_MODEL")
     if configured:
         return Path(configured)
-    return Path(__file__).resolve().parents[3] / "models" / "whisper"
+    # PyInstaller one-directory bundles place data under sys._MEIPASS.\n    bundle_root = getattr(sys, "_MEIPASS", None)\n    if bundle_root is not None:\n        return Path(bundle_root) / "models" / "whisper"\n    return Path(__file__).resolve().parents[3] / "models" / "whisper"
