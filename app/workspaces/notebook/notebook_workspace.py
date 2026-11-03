@@ -37,7 +37,7 @@ class TranscriptionWorker(QThread):
 
     def run(self) -> None:
         try:
-            from app.workspaces.notebook.offline_speech import (
+            from app.workspaces.notebook.voice_service import (
                 OfflineSpeechRecognizer, default_model_dir,
             )
             text = OfflineSpeechRecognizer(default_model_dir()).transcribe_file(self.audio_path)
@@ -137,7 +137,7 @@ class EngineeringNotebookWorkspace(QWidget):
         layout.addWidget(splitter, 1)
 
     def toggle_local_recording(self) -> None:
-        from app.workspaces.notebook.microphone import MicrophoneRecorder
+        from app.workspaces.notebook.voice_service import MicrophoneRecorder
         if self._recorder is None:
             if self.current_document is None or self._transcription_worker is not None:
                 return
