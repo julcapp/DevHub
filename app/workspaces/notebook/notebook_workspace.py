@@ -139,6 +139,8 @@ class EngineeringNotebookWorkspace(QWidget):
     def toggle_local_recording(self) -> None:
         from app.workspaces.notebook.microphone import MicrophoneRecorder
         if self._recorder is None:
+            if self.current_document is None or self._transcription_worker is not None:
+                return
             recorder = MicrophoneRecorder()
             try:
                 recorder.start()
@@ -148,10 +150,12 @@ class EngineeringNotebookWorkspace(QWidget):
             self._recorder = recorder
             self.record_button.setText("⏹ Остановить запись")
             self.save_status.setText("Идёт запись с микрофона…")
+            self._update_controls()
             return
         recorder = self._recorder
         self._recorder = None
         self.record_button.setText("🎤 Записать заметку")
+        self._update_controls()
         try:
             path = recorder.stop()
         except Exception as error:
@@ -377,6 +381,8 @@ class EngineeringNotebookWorkspace(QWidget):
         self.delete_button.setEnabled(enabled)
         self.dictation_button.setEnabled(enabled)
         self.record_button.setEnabled(enabled and self._transcription_worker is None)
+        self.documents.setEnabled(self._recorder is None)
+        self.categories.setEnabled(self._recorder is None)
 
     def closeEvent(self, event) -> None:
         if self._recorder is not None:
