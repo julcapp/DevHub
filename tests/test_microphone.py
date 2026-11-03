@@ -37,3 +37,32 @@ def test_recorder_writes_valid_wav(tmp_path):
             assert audio.getnframes() == 16
     finally:
         path.unlink(missing_ok=True)
+
+
+def test_recorder_rejects_empty_audio():
+    class FakeStream:
+        def stop(self):
+            pass
+        def close(self):
+            pass
+
+    recorder = MicrophoneRecorder()
+    recorder._stream = FakeStream()
+    with pytest.raises(RuntimeError, match="не записал звук"):
+        recorder.stop()
+
+
+def test_recorder_rejects_capture_error():
+    class FakeStream:
+        def stop(self):
+            pass
+        def close(self):
+            pass
+
+    recorder = MicrophoneRecorder()
+    recorder._stream = FakeStream()
+    recorder._frames = [b"\\x00\\x00"]
+    recorder._capture_error = "input overflow"
+    with pytest.raises(RuntimeError, match="input overflow"):
+        recorder.stop()
+    assert not recorder.recording
