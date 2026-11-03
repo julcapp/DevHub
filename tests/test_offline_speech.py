@@ -29,3 +29,10 @@ def test_offline_recognizer_requires_audio_file(tmp_path):
 def test_model_path_override(tmp_path, monkeypatch):
     monkeypatch.setenv("DEVHUB_WHISPER_MODEL", str(tmp_path))
     assert default_model_dir() == tmp_path
+
+
+def test_model_path_from_pyinstaller_bundle(tmp_path, monkeypatch):
+    import sys
+    monkeypatch.delenv("DEVHUB_WHISPER_MODEL", raising=False)
+    monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)
+    assert default_model_dir() == tmp_path / "models" / "whisper"
