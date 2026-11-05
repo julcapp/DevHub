@@ -2,7 +2,7 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication
-from app.workspaces.notebook.notebook_workspace import EngineeringNotebookWorkspace
+from app.workspaces.notebook import EngineeringNotebookWorkspace
 
 
 def test_notebook_autosave_and_category_switch(tmp_path):
