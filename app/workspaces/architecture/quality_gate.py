@@ -64,8 +64,10 @@ class QualityGate:
             and value - baseline.module_coupling[name] > config.max_coupling_growth
         }
         if growth:
+            modules = {item.name: item for item in summary.module_details}
             details = "; ".join(
-                f"{name}: {before} → {after} (+{after - before})"
+                f"{name}: {before} → {after} (+{after - before}); "
+                f"исходящие={modules[name].dependencies}; входящие={modules[name].dependents}"
                 for name, (before, after) in sorted(growth.items())
             )
             violations.append(
