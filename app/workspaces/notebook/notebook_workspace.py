@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.workspaces.notebook.controller import (
+from app.workspaces.notebook.voice_service import (
     NOTEBOOK_CATEGORIES,
     EngineeringNotebookController,
 )
