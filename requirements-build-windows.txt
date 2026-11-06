@@ -1,0 +1,4 @@
+# Windows x64 build-time dependencies. Not needed by end users.
+-r requirements.txt
+-r requirements-voice.txt
+pyinstaller>=6.11,<7
