@@ -57,7 +57,20 @@ class QualityGate:
         if len(new_high) > config.max_new_high_risk_modules:
             violations.append(f"Новых модулей высокого риска {len(new_high)} > допустимых {config.max_new_high_risk_modules}")
         current = {item.name: item.coupling for item in summary.module_details}
-        max_growth = max((current[name] - baseline.module_coupling.get(name, current[name]) for name in current), default=0)
-        if max_growth > config.max_coupling_growth:
-            violations.append(f"Рост связанности {max_growth} > допустимого {config.max_coupling_growth}")
+        growth = {
+            name: (baseline.module_coupling[name], value)
+            for name, value in current.items()
+            if name in baseline.module_coupling
+            and value - baseline.module_coupling[name] > config.max_coupling_growth
+        }
+        if growth:
+            modules = {item.name: item for item in summary.module_details}
+            details = "; ".join(
+                f"{name}: {before} → {after} (+{after - before}); "
+                f"исходящие={modules[name].dependencies}; входящие={modules[name].dependents}"
+                for name, (before, after) in sorted(growth.items())
+            )
+            violations.append(
+                f"Рост связанности выше допустимого {config.max_coupling_growth}: {details}"
+            )
         return QualityGateResult(not violations, tuple(violations))
